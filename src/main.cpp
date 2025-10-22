@@ -4,10 +4,14 @@
 #include <FS.h>
 #include <Melody.h>
 #include <OneWire.h>
-//***********SD card********** */
 // Suggest SD card: Class4 or Class10; 4~16G memory; Fat32 format. File format support: .NC; .GC; .GCODE
 // SD memory card SdD0=I12 ,SdDi=IO13,SdCk=IO14,SdCs=IO15,SdDet=IO39/SensorVn/ based on the C:\a\diy\my machines and tools\my components\makerBaseDlc32v2.1.002.sch
 #include <SD.h>  //  include the SD library:memory card https://www.mischianti.org/2021/03/28/how-to-use-sd-card-with-esp32-2/
+//
+#include <WebServer.h>
+#include <WebSocketsServer.h>
+#include <WiFi.h>
+#include <ArduinoJson.h>
 //
 #include "AdrianOsPcbPins.h"
 #include "Arduino.h"
@@ -51,6 +55,13 @@
 //(the last pin is 3.3 v and it's in the right top corner when controller key is on the left and board is horizontal - top view
 // that is pulled to ground by R29 and serialized by current limiting R28
 const int PotentiometerPin = 35;
+// web
+const char* ssid = "your_SSID";
+const char* password = "your_PASSWORD";
+
+WebServer server(80);
+WebSocketsServer webSocket = WebSocketsServer(81);
+
 AdrianOsPcbPins pins = AdrianOsPcbPins();  // pins is a reference to the object
 //
 enum Preference {  // for preferences
@@ -76,7 +87,6 @@ OneWire oneWire(pins.TempSensorPin);  // GPIO where the DS18B20 is connected to.
 DallasTemperature tempSensor(&oneWire);
 int lastTempHumidityReadTime = 0;  // never
 int lastAlertTime = 0;             // never
-float desiredTemperature = 30;     // seed it todo change back to 36.5
 //
 float currentRPM = 200;  // 30 for demo
 //
@@ -137,12 +147,13 @@ void setStepsPerRotation(int newStepsPerRotation);
 int calculateHeaterDutyCycle();
 void displayHelp();
 void displayCurrentState();
+void webClientSetup();
 
-// end INCLUDES.h
-// time
+    // end INCLUDES.h
+    // time
 
-// SD memory card
-const int32_t SPIfreq = 40000;
+    // SD memory card
+    const int32_t SPIfreq = 40000;
 SerialCommunication serialCommunication = SerialCommunication();
 //
 // need to Open Folder C:\a\diy\espProjects\OrbitalShakerAdrianBoard for the libraries
@@ -224,9 +235,9 @@ void setup() {
     Serial.println("maxHeaterDutyCyclePercentage" + String(calculateHeaterDutyCycle()));
     float temperature;
     float humidity;
-    if (desiredTemperature == 30) {
+    if (pins.desiredTemperature == 30) {
         play(temp30);
-    } else if (desiredTemperature == 37) {
+    } else if (pins.desiredTemperature == 37) {
         play(temp37);
     }
     delay(500);
@@ -258,7 +269,7 @@ void loop() {
             if (TemperatureDisplay) {
                 Serial.print("Current temp: " + String(temperature) + ", " + (pins.UseOneWireForTemperature == 0 ? "Humidity:" + String(humidity) + " ," : ""));
                 Serial.print("DesiredTemperature: ");
-                Serial.print(desiredTemperature);
+                Serial.print(pins.desiredTemperature);
                 Serial.print(" max temperature: " + String(maxTemperature));
                 if (TimeDisplay) {
                     Serial.print(" Time since start: " + getFormatedDurationSinceStart() + " ");
@@ -267,13 +278,13 @@ void loop() {
                 }
             }
         }
-        if (temperature < desiredTemperature) {
+        if (temperature < pins.desiredTemperature) {
             if (firstTimeTurnOnHeater) {
                 play(auClairDeLaLune);
                 firstTimeTurnOnHeater = false;
             }
             digitalWrite(pins.LedPin, HIGH);
-            if (desiredTemperature - temperature >= 2) {
+            if (pins.desiredTemperature - temperature >= 2) {
                 heater(true, calculateHeaterDutyCycle());  // Heater start
             } else {
                 heater(true, calculateHeaterDutyCycle() * ModerateHeat_POWER);
@@ -300,7 +311,10 @@ void loop() {
             }
         }
     }
+    server.handleClient();
+    webSocket.loop();   
 }
+//
 void processStepperOnOffSwitch() {
     int stepperOnOffPosition = readTurnOnStepper();  //-1 for unchanged
     if (stepperOnOffPosition != -1) {
@@ -339,12 +353,12 @@ void processCommand() {
                 Serial.print("Please enter the new desired temperature . Like command 29 for temp 29 Celsius");
                 return;
             }
-            desiredTemperature = commandArguments.toFloat();
-            Serial.print("new desiredTemperature is: ");
-            Serial.println(desiredTemperature);
-            if (desiredTemperature == 30) {
+            pins.desiredTemperature = commandArguments.toFloat();
+            Serial.print("new pins.desiredTemperature is: ");
+            Serial.println(pins.desiredTemperature);
+            if (pins.desiredTemperature == 30) {
                 play(temp30);
-            } else if (desiredTemperature == 37) {
+            } else if (pins.desiredTemperature == 37) {
                 play(temp37);
             }
         } else if (command.indexOf("m") == 0) {
@@ -577,14 +591,14 @@ int readPotentiometer() {
 // WeMos D1 esp8266: D8 as standard
 void displayCurrentState() {
     Serial.println("=========== Current State ============");
-    Serial.println("Desired Temperature: " + String(desiredTemperature));
+    Serial.println("Desired Temperature: " + String(pins.desiredTemperature));
     Serial.println("Desired RPM: " + String(currentRPM));
     Serial.println("Motor is :" + String(isStepperOn ? "ON" : "OFF"));
     Serial.println("Duration since power on is :" + getFormatedDurationSinceStart());
     Serial.println("Max Heater Duty Cycle Percentage: " + String(maxHeaterDutyCyclePercentage) + "%");
     if (pins.currentHeatingEndDurationInMinutes != -1) {
         Serial.print("Desired end time: " + String(pins.currentHeatingEndDurationInMinutes) + " minutes, ");
-        Serial.println("Duration to alarm: " + String(getSecondsToAlarm() / 60) + " minutes " + String(getSecondsToAlarm() % 60) +" seconds");
+        Serial.println("Duration to alarm: " + String(getSecondsToAlarm() / 60) + " minutes " + String(getSecondsToAlarm() % 60) + " seconds");
     } else {
         Serial.println("No desired end time set");
     }
@@ -729,7 +743,7 @@ int readTurnOnStepper() {
     }
     return ret;
 }
-//
+//copied from their example
 void setLoudness(int loudness) {
     // Loudness could be use with a mapping function, according to your buzzer or sound-producing hardware
     const int MinHardware_LOUDNESS = 0;
@@ -743,7 +757,7 @@ String getFormatedDurationSinceStart() {
 }
 // pins.currentStartTime is in miliseconds
 unsigned long getSecondsToAlarm() {
-    unsigned long secondsToAlarm = pins.currentHeatingEndDurationInMinutes*60-(unsigned long)((millis() - pins.currentStartTime) / 1000);
+    unsigned long secondsToAlarm = pins.currentHeatingEndDurationInMinutes * 60 - (unsigned long)((millis() - pins.currentStartTime) / 1000);
     return secondsToAlarm;
 }
 //
@@ -818,7 +832,7 @@ String formatTime(unsigned long time) {
     result += ("s");
     return result;
 }
-//
+//copied from their example
 void play(Melody melody) {
     if (MostMusic_OFF) {
         return;
@@ -870,6 +884,49 @@ void createDir(fs::FS& fs, const char* path) {
     } else {
         Serial.println("mkdir failed");
     }
+}
+
+
+void handleRoot() {
+    String html = "<html><body><h1>Editable Table</h1><table border='1'><tr><th>Label</th><th>Value</th></tr>";
+    html += "<tr><td>Item 1</td><td contenteditable='true' class='editable' onblur='updateValue(this, \"item1\")'>Value 1</td></tr>";
+    html += "<tr><td>Item 2</td><td contenteditable='true' class='editable' onblur='updateValue(this, \"item2\")'>Value 2</td></tr>";
+    html += "</table><script>const connection = new WebSocket('ws://' + window.location.hostname + ':81/'); function updateValue(element, item) { const value = element.innerText; connection.send(JSON.stringify({ command: 'update', item: item, value: value })); }</script></body></html>";
+    server.send(200, "text/html", html);
+}
+
+void handleCommand(uint8_t num, const char* payload) {
+    JsonDocument doc(1024);
+    deserializeJson(doc, payload);
+    String command = doc["command"];
+    if (command == "update") {
+        String item = doc["item"];
+        String value = doc["value"];
+        Serial.printf("Updated %s to %s\n", item.c_str(), value.c_str());
+        // Here you can update your backing object as needed
+    }
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+    switch (type) {
+        case WStype_TEXT:
+            handleCommand(num, (char*)payload);
+            break;
+            // Handle other types if necessary
+    }
+}
+//
+void webClientSetup() {
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+    }
+    Serial.println("Connected to WiFi");
+    server.on("/", handleRoot);
+    server.begin();
+    webSocket.begin();
+    webSocket.onEvent(webSocketEvent);
 }
 
 //

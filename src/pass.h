@@ -1,9 +1,10 @@
-const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
-// const char* ssid= "ad5";
-// const char* password = "S1tormy!";
-  JsonDocument doc;
-const char * readSsi(){
+#include <ArduinoJson.h>
 
+const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
+  const char* ssid= "ad5";
+  const char* password = "S1tormy!";
+  JsonDocument doc;
+const char * readSsid(){
   DeserializationError error = deserializeJson(doc, jsonString);
   if (error) {
       Serial.print(F("deserializeJson() failed: "));

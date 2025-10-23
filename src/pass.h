@@ -1,8 +1,8 @@
+#ifndef Pass_H_
+#define Pass_H_
 #include <ArduinoJson.h>
 
 const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
-  const char* ssid= "ad5";
-  const char* password = "S1tormy!";
   JsonDocument doc;
 const char * readSsid(){
   DeserializationError error = deserializeJson(doc, jsonString);
@@ -24,3 +24,5 @@ const char * readPassword(){
       return doc["password"];
   }
 }
+#endif /* Pass_H_ */
+#pragma once

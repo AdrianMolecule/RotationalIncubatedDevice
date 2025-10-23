@@ -11,4 +11,10 @@ Write C++ platfomio esp32 code. use web sockets. create a class with 2 int field
 Show the values of the fields as editable html fields with labels in a table in a html page.
 When the screen values are updated by editing on the screen the model field values should be updated asynchroniously and the new value should printed at the serial.
 When model field values are updated by entering new data in  the serial the screen values  the html values should be updated asynchroniously.
-use readSsid() preexisting method to get the ssid and readPassword() preexisting method to get the password, both methods are defined in a local pass.h file
+use const char*readSsid() preexisting method to get the ssid and const char* readPassword() preexisting method to get the password, both methods are defined in a local pass.h file so the call should be   WiFi.begin(readSsid(), readPassword());
+
+change so the model has an arbitrary number of fields F1, F2, ..fn set upon initialization of the model instance
+
+change fields from int to a new object of class called Field with name, type, id, and value and a getter and setter for value that is represented as a String. Add a getValueById that takes an id and returns the string value
+
+split in multiple .cpp and .h files for each class and incapsulate the rest of the code except for handleSerial in a Web class. rename getSsid and getPassword to readSsid() and readPassword

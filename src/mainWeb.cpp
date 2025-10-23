@@ -8,10 +8,9 @@
 #include "pass.h"  //for DHT temp sensor
 
 
-
 // WebSocket server
 WebSocketsServer webSocket = WebSocketsServer(81);  // From Display to Board motors and new desired values
-// AsyncWebServer server(80);                          // From Board sensors to Display
+AsyncWebServer server(80);                          // From Board sensors to Display
 DHTesp dhTempSensor;
 // Motor control pins
 const int motor1Pin = 5;
@@ -32,7 +31,7 @@ const char* htmlPage = R"rawliteral(
     <script>
         let socket;
         function setupWebSocket() {
-            socket = new WebSocket('ws://ESP32_IP_ADDRESS:81');
+            socket = new WebSocket('ws://192.168.0.26:81');
             socket.onmessage = function(event) {
                 document.getElementById('temperature').innerText = 'Temperature: ' + event.data + ' °C';
             };
@@ -56,17 +55,9 @@ const char* htmlPage = R"rawliteral(
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    // JsonDocument doc;
-    // DeserializationError error = deserializeJson(doc, jsonString);
-    // if (error) {
-    //     Serial.print(F("deserializeJson() failed: "));
-    //     Serial.println(error.f_str());
-    // } else {
-    //     ssid = doc["ssid"].as<const char*>();
-    //     password = doc["password"].as<const char*>();
-    //     ;
-    // }
-    Serial.print("ssid: " + String(ssid));
+    const char*ssid=readSsi();
+    const char*  password = readPassword();
+    Serial.println("ssid: " + String(ssid));
     Serial.println("password: "+ String(password));
     // WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -86,8 +77,8 @@ void setup() {
             request->send(200, "text/html", htmlPage);  // from board to display sends updated HTML to the display
         }); */
 
-    // Start server
-    // server.begin(); todo
+    // Start server to do what todo
+    //server.begin(); 
     // // DHT sensor setup
     // dhTempSensor.setup(255, DHTesp::DHT22);
     // if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
@@ -119,6 +110,7 @@ void loop() {
 // WebSocket event handler so data from display goes to the board
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
     String message = String((char*)payload);
+    Serial.println("webSocketEvent called with message:");
     Serial.println(message);
     /*  // Motor control commands
      if (message == "motor1_on") {

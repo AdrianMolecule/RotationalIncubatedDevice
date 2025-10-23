@@ -4,7 +4,7 @@ lib_deps =
         arduinoJson
         dualb/Melody@^1.2.0
 */
-const char* password = "S1tormy!";
+const char* password = "guessme123";
 
 void setup() {
     Serial.begin(115200);

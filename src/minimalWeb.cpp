@@ -1,18 +1,10 @@
- #include <WiFi.h>
-/* this works with
-lib_deps =
-        arduinoJson
-        dualb/Melody@^1.2.0
-*/
-const char* password = "guessme123";
+#include <WiFi.h>
+#include "pass.h"
 
 void setup() {
     Serial.begin(115200);
     delay(1000);
-
     // WiFi.mode(WIFI_STA);  // Optional
-    char ssid[4];
-    strcpy(ssid, "ad5");  // Requires <cstring>
     WiFi.begin(ssid, password);
     Serial.println("\nConnecting");
 

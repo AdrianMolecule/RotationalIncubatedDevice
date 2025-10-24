@@ -5,17 +5,14 @@
 #include "Web.h"
 #include "pass.h"
 
-// Create model
 Model model = {
-    Field("F1", "int", 1, "10"),
-    Field("F2", "int", 2, "20"),
-    Field("F3", "float", 3, "3.14"),
-    Field("F4", "string", 4, "Hello")};
+    Field("F1", "int", 1, "10", "Integer field example"),
+    Field("F2", "float", 2, "2.718", "Floating-point field"),
+    Field("Enabled", "bool", 3, "true", "Enable or disable feature"),
+    Field("Label", "string", 4, "Hello", "Label text for display")};
 
-// Create Web interface
 Web web(model);
 
-// Only handle serial input here (Web logic encapsulated)
 void handleSerialInput() {
     if (Serial.available()) {
         String input = Serial.readStringUntil('\n');
@@ -27,8 +24,9 @@ void handleSerialInput() {
             Field* field = model.getFieldByName(name);
             if (field) {
                 field->setValue(value);
-                Serial.printf("Updated via Serial: %s = %s\n", name.c_str(), value.c_str());
-                web.updateClientValues();  // push to clients
+                model.saveField(*field);
+                Serial.printf("Updated via Serial: %s = %s (saved)\n", name.c_str(), value.c_str());
+                web.updateClientValues();
             } else {
                 Serial.println("Unknown field name");
             }
@@ -40,6 +38,7 @@ void handleSerialInput() {
 
 void setup() {
     Serial.begin(115200);
+    model.begin();
     web.begin(readSsid(), readPassword());
 }
 

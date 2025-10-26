@@ -4,7 +4,7 @@
 
 const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
   JsonDocument doc;
-const char * readSsid(){
+const char * getSsid(){
   DeserializationError error = deserializeJson(doc, jsonString);
   if (error) {
       Serial.print(F("deserializeJson() failed: "));
@@ -14,7 +14,7 @@ const char * readSsid(){
       return doc["ssid"];
   }
 }
-const char * readPassword(){
+const char * getPass(){
   DeserializationError error = deserializeJson(doc, jsonString);
   if (error) {
       Serial.print(F("deserializeJson() failed: "));

@@ -163,11 +163,14 @@ void broadcastModel() {
 void listFields() {
     Serial.println(F("\n[MODEL] Fields:"));
     for (auto& f : gModel.fields()) {
-        Serial.printf("  %s (%s): %s\n", f.getName().c_str(), f.getType().c_str(), f.getDescription().c_str());
+        Serial.printf("  %s (%s): %s | Value: %s\n",
+                      f.getName().c_str(),
+                      f.getType().c_str(),
+                      f.getDescription().c_str(),
+                      f.getValue().c_str());
     }
     Serial.println(F("Use <FieldName>=<Value> to modify a value.\n"));
 }
-
 void dumpJson() {
     File file = SPIFFS.open("/model.json", "r");
     if (!file) {
@@ -426,4 +429,3 @@ void loop() {
         }
     }
 }
-?

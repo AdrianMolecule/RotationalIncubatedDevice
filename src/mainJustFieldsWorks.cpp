@@ -171,6 +171,7 @@ void listFields() {
     }
     Serial.println(F("Use <FieldName>=<Value> to modify a value.\n"));
 }
+
 void dumpJson() {
     File file = SPIFFS.open("/model.json", "r");
     if (!file) {
@@ -233,8 +234,19 @@ String generateIndex() {
 </table>
 <script>
 var ws=new WebSocket('ws://'+location.hostname+':81/');
+ws.onmessage=function(event){
+    var data=JSON.parse(event.data);
+    if(!data.fields) return;
+    data.fields.forEach(f=>{
+        var el=document.querySelector("[data-id='"+f.id+"']");
+        if(el){
+            if(el.tagName=="SELECT"){ el.value=f.value; }
+            else{ el.value=f.value; }
+        }
+    });
+};
 function updateField(el){
-  ws.send(JSON.stringify({action:'update',id:el.dataset.id,value:el.value}));
+    ws.send(JSON.stringify({action:'update',id:el.dataset.id,value:el.value}));
 }
 </script>
 </body></html>
@@ -271,11 +283,9 @@ function addField(){
     id:fid.value,name:fname.value,type:ftype.value,
     value:fvalue.value,description:fdesc.value
   }));
-  location.reload();
 }
 function delField(id){
   ws.send(JSON.stringify({action:'delete',id:id}));
-  location.reload();
 }
 </script>
 </body></html>

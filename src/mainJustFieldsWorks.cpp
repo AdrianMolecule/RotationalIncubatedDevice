@@ -167,7 +167,7 @@ class Web {
     Web(Model* m) : server(80), ws(81), model(m) {}
 
     void begin() {
-        if (!SPIFFS.begin(true)) {
+        if (!SPIFFS.begin()) {
             Serial.println("[ERROR] SPIFFS mount failed!");
             return;
         }

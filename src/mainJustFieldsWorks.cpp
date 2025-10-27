@@ -260,15 +260,24 @@ String generateMetadata() {
         "<div><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | "
         "<a href='/debug'>Debug</a></div>";
     html +=
-        "<h1>Metadata</h1><table border='1'><tr><th>ID</th><th>Name</th><th>Type</th>"
-        "<th>Value</th><th>Description</th><th>Action</th></tr>";
+        "<h1>Metadata</h1><table border='1'><thead><tr><th>ID</th><th>Name</th><th>Type</th>"
+        "<th>Value</th><th>Description</th><th>Action</th></tr></thead><tbody>";
+
+    // Populate table initially
     for (auto& f : gModel.fields()) {
-        html += "<tr><td>" + f.getId() + "</td><td>" + f.getName() + "</td><td>" + f.getType() +
-                "</td><td>" + f.getValue() + "</td><td>" + f.getDescription() +
-                "</td><td><button onclick=\"delField('" + f.getId() + "')\">Delete</button></td></tr>";
+        html += "<tr>";
+        html += "<td>" + f.getId() + "</td>";
+        html += "<td>" + f.getName() + "</td>";
+        html += "<td>" + f.getType() + "</td>";
+        html += "<td>" + f.getValue() + "</td>";
+        html += "<td>" + f.getDescription() + "</td>";
+        html += "<td><button onclick=\"delField('" + f.getId() + "')\">Delete</button></td>";
+        html += "</tr>";
     }
+
+    html += "</tbody></table>";
+
     html += R"rawliteral(
-</table>
 <h2>Add Field</h2>
 ID:<input id="fid"> Name:<input id="fname"> Type:<select id="ftype">
 <option value="string">string</option><option value="int">int</option>
@@ -277,6 +286,19 @@ Value:<input id="fvalue"> Desc:<input id="fdesc">
 <button onclick="addField()">Add</button>
 <script>
 var ws=new WebSocket('ws://'+location.hostname+':81/');
+ws.onmessage=function(event){
+    var data=JSON.parse(event.data);
+    if(!data.fields) return;
+    var tbody=document.querySelector("table tbody");
+    tbody.innerHTML="";
+    data.fields.forEach(f=>{
+        var row=document.createElement("tr");
+        row.innerHTML="<td>"+f.id+"</td><td>"+f.name+"</td><td>"+f.type+"</td><td>"+
+                      f.value+"</td><td>"+f.description+"</td><td>"+
+                      "<button onclick=\"delField('"+f.id+"')\">Delete</button></td>";
+        tbody.appendChild(row);
+    });
+};
 function addField(){
   ws.send(JSON.stringify({
     action:'add',
@@ -290,6 +312,7 @@ function delField(id){
 </script>
 </body></html>
 )rawliteral";
+
     return html;
 }
 

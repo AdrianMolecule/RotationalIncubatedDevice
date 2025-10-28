@@ -158,7 +158,6 @@ String generateIndexPage() {
             html += "<td><input data-id='" + f.id + "' value='" + f.value + "' onchange='onChange(this)'></td>";
         html += "<td>" + f.description + "</td></tr>";
     }
-    html += "</table>";
     html += R"(
     <script>
     function onChange(el){
@@ -212,6 +211,54 @@ String generateDebugPage() {
     html += "<h1>Debug</h1><pre>" + model.toJsonString() + "</pre>";
     return html;
 }
+
+// ----------------------
+// BackEnd Class
+// ----------------------
+class BackEnd {
+   public:
+    static unsigned long durationSinceReboot;
+
+    static void setupBackend() {
+        durationSinceReboot = 0;
+        Serial.println("[BACKEND] Backend initialized.");
+    }
+
+    static void loopBackend() {
+        static unsigned long lastUpdate = millis();
+        while (true) {
+            unsigned long now = millis();
+            durationSinceReboot = now / 1000;
+
+            static unsigned long lastModelUpdate = 0;
+            if (durationSinceReboot - lastModelUpdate >= 5) {
+                lastModelUpdate = durationSinceReboot;
+
+                Field* f = model.getByName("duration");
+                if (!f) {
+                    Field nf;
+                    nf.id = "10";
+                    nf.name = "duration";
+                    nf.type = "string";
+                    nf.value = String(durationSinceReboot);
+                    nf.description = "time since start";
+                    nf.readOnly = true;
+                    model.add(nf);
+                    model.save();
+                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                    Serial.printf("[BACKEND] Created field 'duration' = %s\n", nf.value.c_str());
+                } else {
+                    f->value = String(durationSinceReboot);
+                    model.save();
+                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                    Serial.printf("[BACKEND] Updated field 'duration' = %s\n", f->value.c_str());
+                }
+            }
+            delay(1000);
+        }
+    }
+};
+unsigned long BackEnd::durationSinceReboot = 0;
 
 // ----------------------
 // Setup
@@ -311,6 +358,10 @@ void setup() {
     });
 
     Serial.println("[SERIAL] Ready for commands (? , j , FieldName=value , F ... , delete FieldName)");
+
+    // Setup backend
+    BackEnd::setupBackend();
+    xTaskCreate([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr);
 }
 
 // ----------------------

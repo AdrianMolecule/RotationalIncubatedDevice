@@ -144,13 +144,16 @@ WebSocketsServer webSocket(81);
 // Web Pages
 // ----------------------
 String generateMenu() {
-    return "<p><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>";
+    return "<p><a href='/'>Index</a> | <a href='/info'>Info</a>| <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>";
 }
 
-String generateIndexPage() {
+String generateIndexPage(bool brief) {
     String html = generateMenu();
     html += "<h1>Index Page</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
     for (auto& f : model.fields) {
+        if (brief && f.readOnly) {
+            continue;
+        }
         html += "<tr><td>" + f.name + "</td><td>" + f.type + "</td>";
         if (f.readOnly)
             html += "<td><input value='" + f.value + "' disabled></td>";
@@ -225,15 +228,15 @@ class BackEnd {
     }
 
     static void loopBackend() {
-        static unsigned long lastUpdate = millis();
         while (true) {
-            unsigned long now = millis();
-            durationSinceReboot = now / 1000;
+            durationSinceReboot = millis() / 1000;
 
             static unsigned long lastModelUpdate = 0;
             if (durationSinceReboot - lastModelUpdate >= 5) {
                 lastModelUpdate = durationSinceReboot;
-
+                Serial.println("[BACKEND] 100 second stop start.");
+                delay(100000);  // ensure we are in the next second
+                Serial.println("[BACKEND] finished 100 second stop.");
                 Field* f = model.getByName("duration");
                 if (!f) {
                     Field nf;
@@ -306,7 +309,8 @@ void setup() {
         model.save();
     }
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage()); });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
+    server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200,"text/plain","Rebooting..."); delay(100); ESP.restart(); });
@@ -361,7 +365,15 @@ void setup() {
 
     // Setup backend
     BackEnd::setupBackend();
-    xTaskCreate([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr);
+    xTaskCreatePinnedToCore(
+        [](void*) { BackEnd::loopBackend(); },
+        "BackendTask",
+        4096,
+        nullptr,
+        1,
+        nullptr,
+        1  // <-- pinned to Core 1
+    );
 }
 
 // ----------------------

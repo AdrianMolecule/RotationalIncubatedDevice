@@ -1,36 +1,33 @@
-// src/main.cpp
-#include <Arduino.h>
 #include <ArduinoJson.h>
-#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
+#include <FS.h>
 #include <SPIFFS.h>
 #include <WebSocketsServer.h>
 #include <WiFi.h>
 
-#include "pass.h"  // provides getSsid() and getPass()
+#include <vector>
 
-// --------------------------- Field ------------------------------------------
+#include "pass.h"
+
+// ----------------------
+// Field and Model Classes
+// ----------------------
 class Field {
-    String id, name, type, value, description;
-    bool readOnly = false;
-
    public:
-    Field() {}
-    Field(String i, String n, String t, String v, String d, bool ro = false)
-        : id(i), name(n), type(t), value(v), description(d), readOnly(ro) {}
+    String id, name, type, value, description;
+    bool readOnly;
 
-    String getId() const { return id; }
-    String getName() const { return name; }
-    String getType() const { return type; }
-    String getValue() const { return value; }
-    String getDescription() const { return description; }
-    bool isReadOnly() const { return readOnly; }
+    void fromJson(const JsonObject& obj) {
+        id = obj["id"] | "";
+        name = obj["name"] | "";
+        type = obj["type"] | "";
+        value = obj["value"] | "";
+        description = obj["description"] | "";
+        readOnly = obj["readOnly"] | false;
+    }
 
-    void setValue(const String& v) { value = v; }
-    void setReadOnly(bool ro) { readOnly = ro; }
-
-    void toJson(JsonVariant obj) const {
+    void toJson(JsonObject& obj) const {
         obj["id"] = id;
         obj["name"] = name;
         obj["type"] = type;
@@ -38,548 +35,362 @@ class Field {
         obj["description"] = description;
         obj["readOnly"] = readOnly;
     }
-
-    void fromJson(JsonVariant obj) {
-        if (obj.containsKey("id")) id = obj["id"].as<String>();
-        if (obj.containsKey("name")) name = obj["name"].as<String>();
-        if (obj.containsKey("type")) type = obj["type"].as<String>();
-        if (obj.containsKey("value")) value = obj["value"].as<String>();
-        if (obj.containsKey("description")) description = obj["description"].as<String>();
-        if (obj.containsKey("readOnly")) readOnly = obj["readOnly"].as<bool>();
-    }
 };
 
-// --------------------------- Model ------------------------------------------
 class Model {
-    std::vector<Field> fields_;
-
    public:
-    std::vector<Field>& fields() { return fields_; }
+    std::vector<Field> fields;
 
     Field* getById(const String& id) {
-        for (auto& f : fields_)
-            if (f.getId() == id) return &f;
+        for (auto& f : fields)
+            if (f.id == id) return &f;
         return nullptr;
     }
 
     Field* getByName(const String& name) {
-        for (auto& f : fields_)
-            if (f.getName().equalsIgnoreCase(name)) return &f;
+        for (auto& f : fields)
+            if (f.name == name) return &f;
         return nullptr;
     }
 
-    void addField(const Field& f) { fields_.push_back(f); }
+    void add(Field f) { fields.push_back(f); }
 
-    void removeById(const String& id) {
-        fields_.erase(std::remove_if(fields_.begin(), fields_.end(),
-                                     [&](const Field& f) { return f.getId() == id; }),
-                      fields_.end());
+    bool remove(const String& id) {
+        for (size_t i = 0; i < fields.size(); i++) {
+            if (fields[i].id == id) {
+                fields.erase(fields.begin() + i);
+                return true;
+            }
+        }
+        return false;
     }
 
     void reorder(const String& id, bool up) {
-        for (size_t i = 0; i < fields_.size(); ++i) {
-            if (fields_[i].getId() == id) {
+        for (size_t i = 0; i < fields.size(); i++) {
+            if (fields[i].id == id) {
                 if (up && i > 0)
-                    std::swap(fields_[i], fields_[i - 1]);
-                else if (!up && i + 1 < fields_.size())
-                    std::swap(fields_[i], fields_[i + 1]);
-                return;
+                    std::swap(fields[i], fields[i - 1]);
+                else if (!up && i < fields.size() - 1)
+                    std::swap(fields[i], fields[i + 1]);
+                break;
             }
         }
     }
 
     bool load() {
-        if (!SPIFFS.exists("/model.json")) {
-            Serial.println("[SPIFFS] model.json missing");
-            return false;
-        }
+        if (!SPIFFS.exists("/model.json")) return false;
         File f = SPIFFS.open("/model.json", "r");
-        if (!f) {
-            Serial.println("[SPIFFS] model.json open failed");
+        if (!f) return false;
+        size_t size = f.size();
+        if (size == 0) {
+            f.close();
             return false;
         }
-        String j = f.readString();
+        std::unique_ptr<char[]> buf(new char[size + 1]);
+        f.readBytes(buf.get(), size);
+        buf[size] = 0;
         f.close();
-        if (j.isEmpty()) {
-            Serial.println("[SPIFFS] model.json empty");
-            return false;
+        DynamicJsonDocument doc(4096);
+        if (deserializeJson(doc, buf.get())) return false;
+        fields.clear();
+        for (JsonObject fld : doc["fields"].as<JsonArray>()) {
+            Field f;
+            f.fromJson(fld);
+            fields.push_back(f);
         }
+        return !fields.empty();
+    }
 
-        StaticJsonDocument<8192> doc;  // temporary doc size; change if model grows
-        auto err = deserializeJson(doc, j);
-        if (err) {
-            Serial.printf("[SPIFFS] deserializeJson failed: %s\n", err.c_str());
-            return false;
+    bool save() {
+        DynamicJsonDocument doc(4096);
+        JsonArray arr = doc.createNestedArray("fields");
+        for (auto& f : fields) {
+            JsonObject obj = arr.createNestedObject();
+            f.toJson(obj);
         }
-
-        fields_.clear();
-        if (!doc.containsKey("fields")) {
-            Serial.println("[SPIFFS] model.json missing 'fields'");
-            return false;
-        }
-        for (JsonObject obj : doc["fields"].as<JsonArray>()) {
-            Field fld;
-            fld.fromJson(obj);
-            fields_.push_back(fld);
-        }
-        if (fields_.empty()) {
-            Serial.println("[SPIFFS] No fields found in model.json");
-            return false;
-        }
-        Serial.printf("[SPIFFS] Loaded model.json successfully with %u fields\n", (unsigned)fields_.size());
+        File f = SPIFFS.open("/model.json", "w");
+        if (!f) return false;
+        serializeJson(doc, f);
+        f.close();
         return true;
     }
 
-    void save() {
-        StaticJsonDocument<8192> doc;
+    String toJsonString() {
+        DynamicJsonDocument doc(4096);
         JsonArray arr = doc.createNestedArray("fields");
-        for (auto& f : fields_) {
-            JsonObject o = arr.add<JsonObject>();
-            f.toJson(o);
+        for (auto& f : fields) {
+            JsonObject obj = arr.createNestedObject();
+            f.toJson(obj);
         }
-        File f = SPIFFS.open("/model.json", "w");
-        if (!f) {
-            Serial.println("[SPIFFS] Failed to open model.json for writing");
-            return;
-        }
-        serializeJson(doc, f);
-        f.close();
-        Serial.println("[SPIFFS] model.json saved.");
+        String s;
+        serializeJson(doc, s);
+        return s;
+    }
+
+    void listSerial() {
+        for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.name.c_str(), f.type.c_str(), f.value.c_str());
     }
 };
 
-// --------------------------- Globals ----------------------------------------
-Model gModel;
+Model model;
+
+// ----------------------
+// Servers
+// ----------------------
 AsyncWebServer server(80);
-WebSocketsServer ws(81);
+WebSocketsServer webSocket(81);
 
-// --------------------------- Utility functions ------------------------------
-bool isIntegerString(const String& s) {
-    if (s.isEmpty()) return false;
-    size_t i = (s[0] == '+' || s[0] == '-') ? 1 : 0;
-    for (; i < s.length(); ++i)
-        if (!isDigit(s[i])) return false;
-    return true;
-}
-bool isFloatString(const String& s) {
-    if (s.isEmpty()) return false;
-    bool seenDot = false;
-    size_t i = (s[0] == '+' || s[0] == '-') ? 1 : 0;
-    for (; i < s.length(); ++i) {
-        if (s[i] == '.') {
-            if (seenDot) return false;
-            seenDot = true;
-        } else if (!isDigit(s[i]))
-            return false;
-    }
-    return true;
-}
-bool validateFieldValue(const Field& f, const String& val) {
-    String t = f.getType();
-    if (t == "int") return isIntegerString(val);
-    if (t == "float") return isFloatString(val);
-    if (t == "bool") return (val == "0" || val == "1" || val.equalsIgnoreCase("true") || val.equalsIgnoreCase("false"));
-    return true;
+// ----------------------
+// Web Pages
+// ----------------------
+String generateMenu() {
+    return "<p><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>";
 }
 
-void broadcastModel() {
-    StaticJsonDocument<8192> doc;
-    JsonArray arr = doc.createNestedArray("fields");
-    for (auto& f : gModel.fields()) {
-        JsonObject o = arr.add<JsonObject>();
-        f.toJson(o);
-    }
-    String s;
-    serializeJson(doc, s);
-    ws.broadcastTXT(s);
-}
-
-// --------------------------- Serial add-field parser ------------------------
-/*
- Expected format:
-  F id=<id> name=<Name> type=<string|int|float|bool> value=<value> description=<desc> readOnly=<0|1|true|false>
-
- Attributes can appear in any order. Values must not contain spaces (use _ or similar).
-*/
-void addFieldFromSerial(const String& line) {
-    // line begins with 'F ' or 'f '
-    String rest = line;
-    if (rest.startsWith("F "))
-        rest = rest.substring(2);
-    else if (rest.startsWith("f "))
-        rest = rest.substring(2);
-
-    // initialize defaults
-    String id = "";
-    String name = "";
-    String type = "string";
-    String value = "";
-    String description = "";
-    bool readOnly = false;
-
-    // split by spaces into tokens
-    int start = 0;
-    while (start < rest.length()) {
-        // find next space
-        int sp = rest.indexOf(' ', start);
-        String token;
-        if (sp == -1) {
-            token = rest.substring(start);
-            start = rest.length();
-        } else {
-            token = rest.substring(start, sp);
-            start = sp + 1;
-        }
-        token.trim();
-        if (token.length() == 0) continue;
-        int eq = token.indexOf('=');
-        if (eq <= 0) continue;
-        String key = token.substring(0, eq);
-        String val = token.substring(eq + 1);
-        // assign
-        if (key.equalsIgnoreCase("id"))
-            id = val;
-        else if (key.equalsIgnoreCase("name"))
-            name = val;
-        else if (key.equalsIgnoreCase("type"))
-            type = val;
-        else if (key.equalsIgnoreCase("value"))
-            value = val;
-        else if (key.equalsIgnoreCase("description"))
-            description = val;
-        else if (key.equalsIgnoreCase("readonly") || key.equalsIgnoreCase("readOnly")) {
-            if (val == "1" || val.equalsIgnoreCase("true"))
-                readOnly = true;
-            else
-                readOnly = false;
-        }
-    }
-
-    // minimal validation: name and type at least
-    if (name.length() == 0) {
-        Serial.println("[SERIAL] Add field failed: name required (name=<Name>)");
-        return;
-    }
-    // validate type
-    String t = type;
-    t.toLowerCase();
-    if (!(t == "string" || t == "int" || t == "float" || t == "bool")) {
-        Serial.println("[SERIAL] Add field failed: invalid type (use string,int,float,bool)");
-        return;
-    }
-    // if id empty generate one
-    if (id.length() == 0) {
-        int next = (int)gModel.fields().size() + 1;
-        id = String(next);
-        // ensure uniqueness (increment until unique)
-        while (gModel.getById(id) != nullptr) {
-            next++;
-            id = String(next);
-        }
-    } else {
-        // ensure id uniqueness
-        if (gModel.getById(id) != nullptr) {
-            Serial.printf("[SERIAL] Add field failed: id '%s' already exists\n", id.c_str());
-            return;
-        }
-    }
-
-    // create field and basic validation of value
-    Field f(id, name, t, value, description, readOnly);
-    if (!value.isEmpty()) {
-        if (!validateFieldValue(f, value)) {
-            Serial.printf("[SERIAL] Add field failed: invalid value '%s' for type %s\n", value.c_str(), t.c_str());
-            return;
-        }
-    }
-    gModel.addField(f);
-    gModel.save();
-    broadcastModel();
-    Serial.printf("[SERIAL] Added field id=%s name=%s type=%s readOnly=%s\n",
-                  id.c_str(), name.c_str(), t.c_str(), readOnly ? "true" : "false");
-}
-
-// --------------------------- WebSocket handler -------------------------------
-void onWsEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
-    if (type != WStype_TEXT) return;
-    String msg = String((char*)payload).substring(0, length);
-    StaticJsonDocument<1024> doc;
-    if (deserializeJson(doc, msg)) return;
-    String action = doc["action"].as<String>();
-
-    if (action == "update") {
-        String id = doc["id"].as<String>();
-        String val = doc["value"].as<String>();
-        Field* f = gModel.getById(id);
-        if (f) {
-            if (f->isReadOnly()) {
-                Serial.printf("[WEB] Ignored update to readOnly field %s\n", f->getName().c_str());
-                return;
-            }
-            if (validateFieldValue(*f, val)) {
-                f->setValue(val);
-                gModel.save();
-                broadcastModel();
-                Serial.printf("[WEB] Updated %s = %s\n", f->getName().c_str(), val.c_str());
-            } else {
-                Serial.printf("[VALIDATION] Invalid value for %s: %s\n", f->getName().c_str(), val.c_str());
-            }
-        }
-    } else if (action == "add") {
-        Field f;
-        f.fromJson(doc.as<JsonObject>());
-        if (f.getId().isEmpty()) {
-            int next = (int)gModel.fields().size() + 1;
-            String newid = String(next);
-            while (gModel.getById(newid) != nullptr) {
-                next++;
-                newid = String(next);
-            }
-            // rebuild with id
-            f = Field(newid, f.getName(), f.getType(), f.getValue(), f.getDescription(), f.isReadOnly());
-        } else {
-            if (gModel.getById(f.getId()) != nullptr) {
-                Serial.printf("[WEB] Add failed: id %s exists\n", f.getId().c_str());
-                return;
-            }
-        }
-        // validate value if present
-        if (!f.getValue().isEmpty() && !validateFieldValue(f, f.getValue())) {
-            Serial.printf("[WEB] Add failed: invalid value %s for type %s\n", f.getValue().c_str(), f.getType().c_str());
-            return;
-        }
-        gModel.addField(f);
-        gModel.save();
-        broadcastModel();
-        Serial.printf("[WEB] Added %s (id=%s)\n", f.getName().c_str(), f.getId().c_str());
-    } else if (action == "delete") {
-        String id = doc["id"].as<String>();
-        Field* f = gModel.getById(id);
-        if (f) Serial.printf("[WEB] Deleted %s (id=%s)\n", f->getName().c_str(), id.c_str());
-        gModel.removeById(id);
-        gModel.save();
-        broadcastModel();
-    } else if (action == "moveUp" || action == "moveDown") {
-        String id = doc["id"].as<String>();
-        bool up = (action == "moveUp");
-        gModel.reorder(id, up);
-        gModel.save();
-        broadcastModel();
-        Serial.printf("[WEB] Reordered id=%s %s\n", id.c_str(), up ? "up" : "down");
-    }
-}
-
-// --------------------------- Factory default model --------------------------
-void factoryDefaultModel() {
-    Serial.println("[MODEL] Creating factory default model...");
-    gModel.fields().clear();
-    gModel.addField(Field("1", "Temperature", "float", "22.5", "Room temperature", false));
-    gModel.addField(Field("2", "Enabled", "bool", "1", "System enabled", false));
-    gModel.addField(Field("3", "DeviceID", "string", "ESP32-001", "Device identifier", true));
-    gModel.addField(Field("4", "Count", "int", "42", "Event counter", false));
-    gModel.save();
-}
-
-// --------------------------- HTML generators --------------------------------
-String generateIndex() {
-    String html = "<html><head><meta charset='utf-8'><title>Index</title></head><body>";
-    html += "<div><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a></div>";
-    html += "<h1>Index</h1><table border='1'><tr><th>Name</th><th>Type</th><th>Value</th></tr>";
-
-    for (auto& f : gModel.fields()) {
-        String disabled = f.isReadOnly() ? "disabled" : "";
-        html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td><td>";
-        if (f.getType() == "bool") {
-            html += "<select data-id='" + f.getId() + "' onchange='updateField(this)' " + disabled + ">";
-            html += "<option value='1'" + String(f.getValue() == "1" ? " selected" : "") + ">true</option>";
-            html += "<option value='0'" + String(f.getValue() == "0" ? " selected" : "") + ">false</option>";
-            html += "</select>";
-        } else {
-            html += "<input type='" + String((f.getType() == "int" || f.getType() == "float") ? "number" : "text") +
-                    "' data-id='" + f.getId() + "' value='" + f.getValue() + "' onchange='updateField(this)' " + disabled + ">";
-        }
-        html += "</td></tr>";
+String generateIndexPage() {
+    String html = generateMenu();
+    html += "<h1>Index Page</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
+    for (auto& f : model.fields) {
+        html += "<tr><td>" + f.name + "</td><td>" + f.type + "</td>";
+        if (f.readOnly)
+            html += "<td><input value='" + f.value + "' disabled></td>";
+        else
+            html += "<td><input data-id='" + f.id + "' value='" + f.value + "' onchange='onChange(this)'></td>";
+        html += "<td>" + f.description + "</td></tr>";
     }
     html += "</table>";
-
-    html += R"rawliteral(
-<script>
-var ws = new WebSocket('ws://'+location.hostname+':81/');
-ws.onmessage = function(evt){
-  try {
-    var data = JSON.parse(evt.data);
-    if(!data.fields) return;
-    data.fields.forEach(function(f){
-      var el = document.querySelector("[data-id='"+f.id+"']");
-      if(el) {
-        el.value = f.value;
-        el.disabled = !!f.readOnly;
-      }
-    });
-  } catch(e) { console.log("ws parse err", e); }
-};
-function updateField(el){
-  ws.send(JSON.stringify({action:'update', id: el.dataset.id, value: el.value}));
-}
-</script>
-</body></html>
-)rawliteral";
-    return html;
-}
-
-String generateMetadata() {
-    String html = "<html><head><meta charset='utf-8'><title>Metadata</title></head><body>";
-    html += "<div><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a></div>";
-    html += "<h1>Metadata</h1>";
-
-    html += "<table border='1'><thead><tr><th>Name</th><th>Type</th><th>Description</th><th>ReadOnly</th><th>Order</th><th>Delete</th></tr></thead><tbody>";
-    for (auto& f : gModel.fields()) {
-        html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td><td>" + f.getDescription() + "</td>";
-        html += "<td>" + String(f.isReadOnly() ? "Yes" : "No") + "</td>";
-        html += "<td><button onclick=\"moveField('" + f.getId() + "','up')\">&#x25B2;</button><button onclick=\"moveField('" + f.getId() + "','down')\">&#x25BC;</button></td>";
-        html += "<td><button onclick=\"deleteField('" + f.getId() + "')\">Delete</button></td></tr>";
+    html += R"(
+    <script>
+    function onChange(el){
+        var val = el.value;
+        var id = el.getAttribute('data-id');
+        ws.send(JSON.stringify({action:'update',id:id,value:val}));
     }
-    html += "</tbody></table>";
+    var ws = new WebSocket('ws://'+location.hostname+':81/');
+    ws.onmessage=function(evt){ location.reload(); }
+    </script>
+    )";
+    return html;
+}
 
-    html += "<h2>Add Field</h2>";
-    html += "ID: <input id='fid' placeholder='optional'> ";
-    html += "Name: <input id='fname' placeholder='required'> ";
-    html += "Type: <select id='ftype'><option value='string'>string</option><option value='int'>int</option><option value='float'>float</option><option value='bool'>bool</option></select> ";
-    html += "Value: <input id='fvalue' placeholder=''> ";
-    html += "Desc: <input id='fdesc' placeholder=''> ";
-    html += "ReadOnly: <input type='checkbox' id='freadonly'> ";
+String generateMetadataPage() {
+    String html = generateMenu();
+    html += "<h1>Metadata</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr>";
+    for (auto& f : model.fields) {
+        html += "<tr>";
+        html += "<td>" + f.name + "</td><td>" + f.type + "</td><td>" + f.value + "</td><td>" + f.description + "</td>";
+        html += "<td>" + String(f.readOnly) + "</td>";
+        html += "<td><button onclick='reorder(\"" + f.id + "\",true)'>&#9650;</button> <button onclick='reorder(\"" + f.id + "\",false)'>&#9660;</button></td>";
+        html += "<td><button onclick='delField(\"" + f.id + "\")'>Delete</button></td>";
+        html += "</tr>";
+    }
+    html += "</table><h3>Add New Field</h3>";
+    html += "ID: <input id='fid'><br>Name: <input id='fname'><br>Type: <input id='ftype'><br>Value: <input id='fvalue'><br>Description: <input id='fdesc'><br>ReadOnly: <input id='freadonly' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
-
-    html += R"rawliteral(
-<script>
-var ws = new WebSocket('ws://'+location.hostname+':81/');
-ws.onmessage = function(evt){
-  try {
-    var data = JSON.parse(evt.data);
-    if(!data.fields) return;
-    var rows = '';
-    data.fields.forEach(function(f){
-      rows += '<tr><td>'+f.name+'</td><td>'+f.type+'</td><td>'+f.description+'</td><td>'+(f.readOnly?'Yes':'No')+'</td>';
-      rows += '<td><button onclick="moveField(\''+f.id+'\',\'up\')">&#x25B2;</button><button onclick="moveField(\''+f.id+'\',\'down\')">&#x25BC;</button></td>';
-      rows += '<td><button onclick="deleteField(\''+f.id+'\')">Delete</button></td></tr>';
-    });
-    document.querySelector('table').innerHTML = '<tr><th>Name</th><th>Type</th><th>Description</th><th>ReadOnly</th><th>Order</th><th>Delete</th></tr>' + rows;
-  } catch(e) { console.log("ws parse err", e); }
-};
-function addField(){
-  var obj = {
-    action: 'add',
-    id: document.getElementById('fid').value,
-    name: document.getElementById('fname').value,
-    type: document.getElementById('ftype').value,
-    value: document.getElementById('fvalue').value,
-    description: document.getElementById('fdesc').value,
-    readOnly: document.getElementById('freadonly').checked
-  };
-  ws.send(JSON.stringify(obj));
-  document.getElementById('fid').value=''; document.getElementById('fname').value=''; document.getElementById('fvalue').value='';
-  document.getElementById('fdesc').value=''; document.getElementById('freadonly').checked=false;
-}
-function deleteField(id){ ws.send(JSON.stringify({action:'delete', id:id})); }
-function moveField(id,dir){ ws.send(JSON.stringify({action: dir==='up'?'moveUp':'moveDown', id:id})); }
-</script>
-</body></html>
-)rawliteral";
+    html += R"(
+    <script>
+    var ws = new WebSocket('ws://'+location.hostname+':81/');
+    function delField(id){ ws.send(JSON.stringify({action:'delete',id:id})); }
+    function reorder(id,up){ ws.send(JSON.stringify({action:up?'moveUp':'moveDown',id:id})); }
+    function addField(){
+        var msg={action:'add',field:{id:document.getElementById('fid').value,
+                                    name:document.getElementById('fname').value,
+                                    type:document.getElementById('ftype').value,
+                                    value:document.getElementById('fvalue').value,
+                                    description:document.getElementById('fdesc').value,
+                                    readOnly:document.getElementById('freadonly').checked}};
+        ws.send(JSON.stringify(msg));
+    }
+    ws.onmessage=function(evt){ location.reload(); }
+    </script>
+    )";
     return html;
 }
 
-String generateDebug() {
-    String html = "<html><head><meta charset='utf-8'><title>Debug</title></head><body>";
-    html += "<div><a href='/'>Index</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a></div>";
-    html += "<h1>Debug</h1><pre>";
-    File f = SPIFFS.open("/model.json", "r");
-    if (f) {
-        while (f.available()) html += (char)f.read();
-        f.close();
-    } else
-        html += "[SPIFFS] model.json missing";
-    html += "</pre><br><button onclick='fetch(\"/reboot\").then(()=>alert(\"Rebooting\"))'>Reboot ESP32</button>";
-    html += "</body></html>";
+String generateDebugPage() {
+    String html = generateMenu();
+    html += "<h1>Debug</h1><pre>" + model.toJsonString() + "</pre>";
     return html;
 }
 
-// --------------------------- Setup / Loop -----------------------------------
+// ----------------------
+// Setup
+// ----------------------
 void setup() {
     Serial.begin(115200);
-    Serial.println("\nBooting...");
+    delay(1000);
+    Serial.println("Booting...");
 
-    WiFi.mode(WIFI_STA);
     WiFi.begin(getSsid(), getPass());
-    Serial.print("[WiFi] Connecting");
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
+    Serial.print("Connecting to Wi-Fi");
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 20) {
         delay(500);
         Serial.print(".");
+        timeout++;
     }
-    if (WiFi.status() == WL_CONNECTED)
-        Serial.printf("\n[WiFi] Connected: %s\n", WiFi.localIP().toString().c_str());
-    else
-        Serial.println("\n[WiFi] Failed to connect");
+    Serial.println();
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("[WiFi] Connected.");
+        Serial.print("[WiFi] IP: ");
+        Serial.println(WiFi.localIP());
+        if (MDNS.begin("bio"))
+            Serial.println("[mDNS] Registered as bio.local");
+        else
+            Serial.println("[mDNS] Failed to start mDNS");
+    } else
+        Serial.println("[WiFi] Connection failed!");
 
-    if (MDNS.begin("ad"))
-        Serial.println("[mDNS] Registered as ad.local");
+    if (!SPIFFS.begin(false))
+        Serial.println("[SPIFFS] Mount failed!");
     else
-        Serial.println("[mDNS] mDNS failed");
-
-    if (SPIFFS.begin())
         Serial.println("[SPIFFS] Mounted successfully.");
-    else
-        Serial.println("[SPIFFS] SPIFFS mount failed!");
 
-    if (!gModel.load()) factoryDefaultModel();
+    if (!model.load()) {
+        Serial.println("[MODEL] Loading factory default");
+        Field f1{"1", "Temperature", "float", "22.5", "Room temp", false};
+        Field f2{"2", "Enabled", "bool", "true", "System enabled", false};
+        Field f3{"3", "DeviceID", "string", "ESP32-001", "Identifier", true};
+        Field f4{"4", "Count", "int", "42", "Event counter", false};
+        model.add(f1);
+        model.add(f2);
+        model.add(f3);
+        model.add(f4);
+        model.save();
+    }
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndex()); });
-    server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadata()); });
-    server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebug()); });
-    server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/plain", "Rebooting..."); delay(500); ESP.restart(); });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage()); });
+    server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
+    server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
+    server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200,"text/plain","Rebooting..."); delay(100); ESP.restart(); });
 
     server.begin();
 
-    ws.begin();
-    ws.onEvent(onWsEvent);
+    webSocket.begin();
+    webSocket.onEvent([](uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+        if (type == WStype_TEXT) {
+            DynamicJsonDocument doc(1024);
+            deserializeJson(doc, payload);
+            String action = doc["action"] | "";
+            if (action == "update") {
+                String id = doc["id"] | "";
+                String val = doc["value"] | "";
+                Field* f = model.getById(id);
+                if (f && !f->readOnly) {
+                    f->value = val;
+                    model.save();
+                    Serial.printf("[WEB] Updated %s = %s\n", f->name.c_str(), f->value.c_str());
+                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                }
+            } else if (action == "delete") {
+                String id = doc["id"] | "";
+                if (model.remove(id)) {
+                    model.save();
+                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                }
+            } else if (action == "moveUp") {
+                String id = doc["id"] | "";
+                model.reorder(id, true);
+                model.save();
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+            } else if (action == "moveDown") {
+                String id = doc["id"] | "";
+                model.reorder(id, false);
+                model.save();
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+            } else if (action == "add") {
+                JsonObject fld = doc["field"].as<JsonObject>();
+                Field f;
+                f.fromJson(fld);
+                model.add(f);
+                model.save();
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+                Serial.printf("[WEB] Added new field %s (%s)\n", f.name.c_str(), f.type.c_str());
+            }
+        }
+    });
 
-    Serial.printf("Root URL: http://%s/\n", WiFi.localIP().toString().c_str());
-    Serial.println("Serial commands: ? = list, j = dump json, <FieldName>=<Value> = update, F ... = add field");
-    broadcastModel();
+    Serial.println("[SERIAL] Ready for commands (? , j , FieldName=value , F ... , delete FieldName)");
 }
 
+// ----------------------
+// Loop
+// ----------------------
 void loop() {
-    ws.loop();
-
+    webSocket.loop();
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
-        if (line == "?") {
-            for (auto& f : gModel.fields()) Serial.printf("%s (%s) = %s | ReadOnly=%s\n",
-                                                          f.getName().c_str(), f.getType().c_str(), f.getValue().c_str(), f.isReadOnly() ? "true" : "false");
-        } else if (line == "j") {
-            File f = SPIFFS.open("/model.json", "r");
-            if (f) {
-                while (f.available()) Serial.write(f.read());
-                f.close();
-                Serial.println();
+        if (line == "?")
+            model.listSerial();
+        else if (line == "j")
+            Serial.println(model.toJsonString());
+        else if (line.startsWith("F ")) {
+            Field f;
+            f.readOnly = false;
+            int idx;
+            idx = line.indexOf("name=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.name = line.substring(idx + 5, e);
             }
-        } else if (line.startsWith("F ") || line.startsWith("f ")) {
-            addFieldFromSerial(line);
-        } else if (line.indexOf('=') > 0) {
-            String name = line.substring(0, line.indexOf('='));
-            String val = line.substring(line.indexOf('=') + 1);
-            Field* f = gModel.getByName(name);
+            idx = line.indexOf("id=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.id = line.substring(idx + 3, e);
+            }
+            idx = line.indexOf("type=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.type = line.substring(idx + 5, e);
+            }
+            idx = line.indexOf("value=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.value = line.substring(idx + 6, e);
+            }
+            idx = line.indexOf("description=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.description = line.substring(idx + 12, e);
+            }
+            idx = line.indexOf("readonly=");
+            if (idx >= 0) {
+                f.readOnly = (line.substring(idx + 9, idx + 10) == "1");
+            }
+            if (f.name != "") {
+                model.add(f);
+                model.save();
+                Serial.printf("[SERIAL] Added field %s\n", f.name.c_str());
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+            }
+        } else if (line.startsWith("delete ")) {
+            String name = line.substring(7);
+            Field* f = model.getByName(name);
             if (f) {
-                if (validateFieldValue(*f, val)) {
-                    f->setValue(val);
-                    gModel.save();
-                    broadcastModel();
-                    Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), val.c_str());
-                } else
-                    Serial.printf("[VALIDATION] Invalid value for %s: %s\n", f->getName().c_str(), val.c_str());
-            } else
-                Serial.printf("[SERIAL] Field not found: %s\n", name.c_str());
+                model.remove(f->id);
+                model.save();
+                Serial.printf("[SERIAL] Deleted field %s\n", name.c_str());
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+            }
+        } else {
+            int eq = line.indexOf('=');
+            if (eq > 0) {
+                String name = line.substring(0, eq);
+                String val = line.substring(eq + 1);
+                Field* f = model.getByName(name);
+                if (f && !f->readOnly) {
+                    f->value = val;
+                    model.save();
+                    Serial.printf("[SERIAL] Updated %s = %s\n", f->name.c_str(), f->value.c_str());
+                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                }
+            }
         }
     }
 }

@@ -61,7 +61,8 @@
 			"format": "cpp",
 			"span": "cpp",
 			"text_encoding": "cpp",
-			"regex": "cpp"
+			"regex": "cpp",
+			"chrono": "cpp"
 		}
 	}
 }

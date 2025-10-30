@@ -1,0 +1,5 @@
+F id=33 name=newFiled type = int description = new field
+F id=35 name=o  type = o description = o
+F id=36 name=o  value=4 type =o description =o readonly=1
+delete o
+delete f

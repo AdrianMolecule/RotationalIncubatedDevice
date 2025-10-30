@@ -438,7 +438,7 @@ void loop() {
             if (f) {
                 model.remove(f->id);
                 model.save();
-                Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
+                Serial.printf("[SERIAL] Deleted field %s\n", name.c_str());
                 webSocket.broadcastTXT(model.toJsonString().c_str());
             }
         } else {

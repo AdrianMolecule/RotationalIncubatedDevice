@@ -8,34 +8,12 @@
 
 #include <vector>
 
+#include "JsonWrapper.h"
 #include "pass.h"
 
 // ----------------------
 // Field and Model Classes
 // ----------------------
-class Field {
-   public:
-    String id, name, type, value, description;
-    bool readOnly;
-
-    void fromJson(const JsonObject& obj) {
-        id = obj["id"] | "";
-        name = obj["name"] | "";
-        type = obj["type"] | "";
-        value = obj["value"] | "";
-        description = obj["description"] | "";
-        readOnly = obj["readOnly"] | false;
-    }
-
-    void toJson(JsonObject& obj) const {
-        obj["id"] = id;
-        obj["name"] = name;
-        obj["type"] = type;
-        obj["value"] = value;
-        obj["description"] = description;
-        obj["readOnly"] = readOnly;
-    }
-};
 
 class Model {
    public:
@@ -43,13 +21,13 @@ class Model {
 
     Field* getById(const String& id) {
         for (auto& f : fields)
-            if (f.id == id) return &f;
+            if (f.getId() == id) return &f;
         return nullptr;
     }
 
     Field* getByName(const String& name) {
         for (auto& f : fields)
-            if (f.name == name) return &f;
+            if (f.getName() == name) return &f;
         return nullptr;
     }
 
@@ -57,7 +35,7 @@ class Model {
 
     bool remove(const String& id) {
         for (size_t i = 0; i < fields.size(); i++) {
-            if (fields[i].id == id) {
+            if (fields[i].getId() == id) {
                 fields.erase(fields.begin() + i);
                 return true;
             }
@@ -67,7 +45,7 @@ class Model {
 
     void reorder(const String& id, bool up) {
         for (size_t i = 0; i < fields.size(); i++) {
-            if (fields[i].id == id) {
+            if (fields[i].getId() == id) {
                 if (up && i > 0)
                     std::swap(fields[i], fields[i - 1]);
                 else if (!up && i < fields.size() - 1)
@@ -101,35 +79,22 @@ class Model {
         return !fields.empty();
     }
 
-    bool save() {
-        JsonDocument doc;
-
-        JsonArray arr = doc["fields"].to<JsonArray>();
-        for (auto& f : fields) {
-            JsonObject obj = arr.add<JsonObject>();
-            f.toJson(obj);
+    bool saveToFile() {
+        File file = SPIFFS.open("/model.json", "w");
+        if (!file) {
+            Serial.println("error in model saveToFile file");
+            return false;
         }
-        File f = SPIFFS.open("/model.json", "w");
-        if (!f) return false;
-        serializeJson(doc, f);
-        f.close();
+        return JsonWrapper::saveModelToFile("/model.json", fields);
         return true;
     }
 
-    String toJsonString() {
-        JsonDocument doc;
-        JsonArray arr = doc["fields"].to<JsonArray>();
-        for (auto& f : fields) {
-            JsonObject obj = arr.add<JsonObject>();
-            f.toJson(obj);
-        }
-        String s;
-        serializeJson(doc, s);
-        return s;
+    String fieldsToJsonString() {
+        return JsonWrapper::fieldsToJsonString(fields);
     }
 
     void listSerial() {
-        for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.name.c_str(), f.type.c_str(), f.value.c_str());
+        for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
     }
 };
 
@@ -152,15 +117,15 @@ String generateIndexPage(bool brief) {
     String html = generateMenu();
     html += "<h1>Index Page</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
     for (auto& f : model.fields) {
-        if (brief && f.readOnly) {
+        if (brief && f.getReadOnly()) {
             continue;
         }
-        html += "<tr><td>" + f.name + "</td><td>" + f.type + "</td>";
-        if (f.readOnly)
-            html += "<td><input value='" + f.value + "' disabled></td>";
+        html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
+        if (f.getReadOnly())
+            html += "<td><input value='" + f.getValue() + "' disabled></td>";
         else
-            html += "<td><input data-id='" + f.id + "' value='" + f.value + "' onchange='onChange(this)'></td>";
-        html += "<td>" + f.description + "</td></tr>";
+            html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "' onchange='onChange(this)'></td>";
+        html += "<td>" + f.getDescription() + "</td></tr>";
     }
     html += R"(
     <script>
@@ -175,18 +140,18 @@ String generateIndexPage(bool brief) {
     )";
     return html;
 }
-
 String generateMetadataPage() {
     String html = generateMenu();
     html += "<h1>Metadata</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr>";
     for (auto& f : model.fields) {
         html += "<tr>";
-        html += "<td>" + f.name + "</td><td>" + f.type + "</td><td>" + f.value + "</td><td>" + f.description + "</td>";
-        html += "<td>" + String(f.readOnly) + "</td>";
-        html += "<td><button onclick='reorder(\"" + f.id + "\",true)'>&#9650;</button> <button onclick='reorder(\"" + f.id + "\",false)'>&#9660;</button></td>";
-        html += "<td><button onclick='delField(\"" + f.id + "\")'>Delete</button></td>";
+        html += "<td>" + f.getName()+ "</td><td>" + f.getType() + "</td><td>" + f.getValue() + "</td><td>" + f.getDescription() + "</td>";
+        html += "<td>" + String(f.getReadOnly()) + "</td>";
+        html += "<td><button onclick='reorder(\"" + f.getId() + "\",true)'>&#9650;</button> <button onclick='reorder(\"" + f.getId() + "\",false)'>&#9660;</button></td>";
+        html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td>";
         html += "</tr>";
     }
+
     html += "</table><h3>Add New Field</h3>";
     html += "ID: <input id='fid'><br>Name: <input id='fname'><br>Type: <input id='ftype'><br>Value: <input id='fvalue'><br>Description: <input id='fdesc'><br>ReadOnly: <input id='freadonly' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
@@ -212,7 +177,7 @@ String generateMetadataPage() {
 
 String generateDebugPage() {
     String html = generateMenu();
-    html += "<h1>Debug</h1><pre>" + model.toJsonString() + "</pre>";
+    html += "<h1>Debug</h1><pre>" + model.fieldsToJsonString() + "</pre>";
     return html;
 }
 
@@ -236,45 +201,33 @@ class BackEnd {
                 lastModelUpdateInSeconds = durationSinceRebootInSeconds;
                 Field* f = model.getByName("duration");
                 if (!f) {
-                    Field nf;
-                    nf.id = "10";
-                    nf.name = "duration";
-                    nf.type = "string";
-                    nf.value = String(durationSinceRebootInSeconds);
-                    nf.description = "time since start";
-                    nf.readOnly = true;
+                    Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", true);
                     model.add(nf);
-                    model.save();
-                    webSocket.broadcastTXT(model.toJsonString().c_str());
-                    Serial.printf("[BACKEND] Created field 'duration' = %s\n", nf.value.c_str());
+                    model.saveToFile();
+                    webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
+                    Serial.printf("[BACKEND] Created field 'duration' = %s\n", nf.getValue().c_str());
                 } else {
-                    f->value = String(durationSinceRebootInSeconds);
-                    model.save();
-                    webSocket.broadcastTXT(model.toJsonString().c_str());
-                    Serial.printf("[BACKEND] Updated field 'duration' = %s\n", f->value.c_str());
+                    f->setValue(String(durationSinceRebootInSeconds));
+                    model.saveToFile();
+                    webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
+                    Serial.printf("[BACKEND] Updated field 'duration' = %s\n", f->getValue().c_str());
                 }
             }
             // make sure we have a delay in the model. If not prepopulate with n seconds
             Field* f = model.getByName("delay");
             String delayAsString;
             if (!f) {
-                Field nf;
-                nf.id = "11";
-                nf.name = "delay";
-                nf.type = "string";
-                nf.value = String(7);
-                nf.description = "blocking delay in the backEndLoop";
-                nf.readOnly = true;
+                Field nf("11", "delay", "string", String(7), "blocking delay in the backEndLoop", false);
                 model.add(nf);
-                model.save();
-                webSocket.broadcastTXT(model.toJsonString().c_str());
-                Serial.printf("[BACKEND] Added field 'delay' = %s\n", nf.value.c_str());
-                delayAsString = nf.value;
+                model.saveToFile();
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
+                Serial.printf("[BACKEND] Added field 'delay' = %s\n", nf.getValue().c_str());
+                delayAsString = nf.getValue();
             } else {
-                delayAsString = f->value;
+                delayAsString = f->getValue();
             }
-            int delayAsInt = delayAsString.toInt()*1000;
-            Serial.println("[BACKEND] blocking delay of" + delayAsString + " started.");
+            int delayAsInt = delayAsString.toInt() * 1000;
+            Serial.println("[BACKEND] blocking delay of " + delayAsString + " started.");
             delay(delayAsInt);  // this is to test that we can still update from ui and serial immediatly even if this loop is blocked
             Serial.println("[BACKEND] blocking delay ended.");
         }
@@ -325,7 +278,7 @@ void setup() {
         model.add(f2);
         model.add(f3);
         model.add(f4);
-        model.save();
+        model.saveToFile();
     }
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
@@ -341,41 +294,45 @@ void setup() {
         if (type == WStype_TEXT) {
             JsonDocument doc;
             deserializeJson(doc, payload);
+            String jsonString;
+            // Serialize the JsonDocument to the String
+            serializeJson(doc, jsonString);
+            Serial.println("webSocket.onEvent received an event of type text and the content turned to Jason is:" + jsonString);
             String action = doc["action"] | "";
             if (action == "update") {
                 String id = doc["id"] | "";
                 String val = doc["value"] | "";
                 Field* f = model.getById(id);
-                if (f && !f->readOnly) {
-                    f->value = val;
-                    model.save();
-                    Serial.printf("[WEB] Updated %s = %s\n", f->name.c_str(), f->value.c_str());
-                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                if (f && !f->getReadOnly()) {
+                    f->setValue(val);
+                    model.saveToFile();
+                    Serial.printf("[WEB] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
+                    webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
                 }
             } else if (action == "delete") {
                 String id = doc["id"] | "";
                 if (model.remove(id)) {
-                    model.save();
-                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                    model.saveToFile();
+                    webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
                 }
             } else if (action == "moveUp") {
                 String id = doc["id"] | "";
                 model.reorder(id, true);
-                model.save();
-                webSocket.broadcastTXT(model.toJsonString().c_str());
+                model.saveToFile();
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
             } else if (action == "moveDown") {
                 String id = doc["id"] | "";
                 model.reorder(id, false);
-                model.save();
-                webSocket.broadcastTXT(model.toJsonString().c_str());
+                model.saveToFile();
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
             } else if (action == "add") {
                 JsonObject fld = doc["field"].as<JsonObject>();
                 Field f;
                 f.fromJson(fld);
                 model.add(f);
-                model.save();
-                webSocket.broadcastTXT(model.toJsonString().c_str());
-                Serial.printf("[WEB] Added new field %s (%s)\n", f.name.c_str(), f.type.c_str());
+                model.saveToFile();
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
+                Serial.printf("[WEB] Added new field %s (%s)\n", f.getName().c_str(), f.getType().c_str());
             }
         }
     });
@@ -406,59 +363,59 @@ void loop() {
         if (line == "?")
             model.listSerial();
         else if (line == "j")
-            Serial.println(model.toJsonString());
+            Serial.println(model.fieldsToJsonString());
         else if (line.startsWith("F ")) {
             Field f;
-            f.readOnly = false;
+            f.setReadOnly(false);
             int idx;
             idx = line.indexOf("name=");
             if (idx >= 0) {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
-                f.name = line.substring(idx + 5, e);
+                f.setName(line.substring(idx + 5, e));
             }
             idx = line.indexOf("id=");
             if (idx >= 0) {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
-                f.id = line.substring(idx + 3, e);
+                f.setId(line.substring(idx + 3, e));
             }
             idx = line.indexOf("type=");
             if (idx >= 0) {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
-                f.type = line.substring(idx + 5, e);
+                f.setType(line.substring(idx + 5, e));
             }
             idx = line.indexOf("value=");
             if (idx >= 0) {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
-                f.value = line.substring(idx + 6, e);
+                f.setValue(line.substring(idx + 6, e));
             }
             idx = line.indexOf("description=");
             if (idx >= 0) {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
-                f.description = line.substring(idx + 12, e);
+                f.setDescription(line.substring(idx + 12, e));
             }
             idx = line.indexOf("readonly=");
             if (idx >= 0) {
-                f.readOnly = (line.substring(idx + 9, idx + 10) == "1");
+                f.setReadOnly((line.substring(idx + 9, idx + 10) == "1"));
             }
-            if (f.name != "") {
+            if (f.getName() != "") {
                 model.add(f);
-                model.save();
-                Serial.printf("[SERIAL] Added field %s\n", f.name.c_str());
-                webSocket.broadcastTXT(model.toJsonString().c_str());
+                model.saveToFile();
+                Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
             }
         } else if (line.startsWith("delete ")) {
             String name = line.substring(7);
             Field* f = model.getByName(name);
             if (f) {
-                model.remove(f->id);
-                model.save();
+                model.remove(f->getId());
+                model.saveToFile();
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
-                webSocket.broadcastTXT(model.toJsonString().c_str());
+                webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
             }
         } else {
             int eq = line.indexOf('=');
@@ -466,11 +423,11 @@ void loop() {
                 String name = line.substring(0, eq);
                 String val = line.substring(eq + 1);
                 Field* f = model.getByName(name);
-                if (f && !f->readOnly) {
-                    f->value = val;
-                    model.save();
-                    Serial.printf("[SERIAL] Updated %s = %s\n", f->name.c_str(), f->value.c_str());
-                    webSocket.broadcastTXT(model.toJsonString().c_str());
+                if (f && !f->getReadOnly()) {
+                    f->setValue(val);
+                    model.saveToFile();
+                    Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
+                    webSocket.broadcastTXT(model.fieldsToJsonString().c_str());
                 }
             }
         }

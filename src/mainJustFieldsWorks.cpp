@@ -11,6 +11,8 @@
 #include "JsonWrapper.h"
 #include "pass.h"
 
+//Adrian next I'll remove the unnecessary socket server
+
 // ----------------------
 // Field and Model Classes
 // ----------------------

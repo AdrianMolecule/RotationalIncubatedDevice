@@ -1,31 +1,33 @@
-#pragma once
-#include <ArduinoJson.h>
-#include <vector>
-#include "Field.h"
+// #pragma once
+// #include <ArduinoJson.h>
 
-class JsonWrapper {
-public:
-    // Convert vector of Fields → JSON string
-    static String fieldsToJson(const std::vector<Field>& fields);
+// #include <vector>
 
-    // Convert a single Field → JSON string
-    static String fieldToJson(const Field& f);
+// #include "Field.h"
 
-    // Parse JSON string → single Field
-    static bool jsonToField(const String& jsonStr, Field& f);
+// class JsonWrapper {
+//    public:
+//     // Convert vector of Fields → JSON string
+//     static String fieldsToJsonString(const std::vector<Field>& fields);
 
-    // Parse JSON string → vector<Field>
-    static bool jsonToFields(const String& jsonStr, std::vector<Field>& fields);
+//     // Convert a single Field → JSON string
+//     static String fieldToJsonString(const Field& f);
 
-    // Generate JSON for delete action
-    static String deleteFieldJson(const String& id);
+//     // Parse JSON string → single Field
+//     static bool jsonToField(const String& jsonStr, Field& f);
 
-    // Generate JSON for update action
-    static String updateFieldJson(const Field& f);
+//     // Parse JSON string → vector<Field>
+//     static bool jsonToFields(const String& jsonStr, std::vector<Field>& fields);
 
-    // Save fields to SPIFFS file
-    static bool saveToFile(const char* path, const std::vector<Field>& fields);
+//     // Generate JSON for delete action
+//     static String deleteFieldJson(const String& id);
 
-    // Load fields from SPIFFS file
-    static bool loadFromFile(const char* path, std::vector<Field>& fields);
-};
+//     // Generate JSON for update action
+//     static String updateFieldJson(const Field& f);
+
+//     // Save fields to SPIFFS file
+//     static bool saveModelToFile(const char* path, const std::vector<Field>& fields);
+
+//     // Load fields from SPIFFS file
+//     static bool loadModelFromFile(const char* path, std::vector<Field>& fields);
+// };

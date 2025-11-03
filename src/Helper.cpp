@@ -1,41 +1,66 @@
-#include "Helper.h"
+// #include "Helper.h"
+// #include "Controller.h"
 
-// Default fields with all data members: name, type, value, description, id, readOnly
-std::vector<Field> Helper::defaultFields() {
-    return std::vector<Field>{
-        Field("Speed", "float", "0.0", "Motor speed in RPM", "f1", false),
-        Field("Duration", "int", "10", "Operation duration in seconds", "f2", false),
-        Field("Enabled", "bool", "true", "Enable the system", "f3", false),
-        Field("Mode", "string", "Auto", "Operation mode", "f4", false)
-    };
-}
+// String Helper::htmlEscape(const String& input) {
+//     String s = input;
+//     s.replace("&", "&amp;");
+//     s.replace("<", "&lt;");
+//     s.replace(">", "&gt;");
+//     s.replace("\"", "&quot;");
+//     s.replace("'", "&#39;");
+//     return s;
+// }
 
-// Generate a simple top menu for navigation
-String Helper::generateMenu() {
-    return "<nav>"
-           "<a href='/'>Home</a> | "
-           "<a href='/info'>Info</a> | "
-           "<a href='/metadata'>Metadata</a> | "
-           "<a href='/debug'>Debug</a>"
-           "</nav><hr/>";
-}
+// String Helper::generateFieldsTable(const std::vector<Field>& fields) {
+//     String table = "<table border='1' style='border-collapse: collapse;'>";
+//     table += "<tr><th>ID</th><th>Name</th><th>Type</th><th>Value</th></tr>";
+//     for (auto& f : fields) {
+//         table += "<tr>";
+//         table += "<td>" + htmlEscape(f.getId()) + "</td>";
+//         table += "<td>" + htmlEscape(f.getName()) + "</td>";
+//         table += "<td>" + htmlEscape(f.getType()) + "</td>";
+//         table += "<td>" + htmlEscape(f.getValue()) + "</td>";
+//         table += "</tr>";
+//     }
+//     table += "</table>";
+//     return table;
+// }
 
-// Standard HTML header with a title
-String Helper::htmlHeader(const String& title) {
-    return "<!DOCTYPE html><html><head>"
-           "<meta charset='UTF-8'>"
-           "<title>" + title + "</title>"
-           "<style>"
-           "body { font-family: Arial, sans-serif; }"
-           "table { border-collapse: collapse; width: 100%; }"
-           "th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }"
-           "th { background-color: #f2f2f2; }"
-           "input, select { width: 90%; }"
-           "</style>"
-           "</head><body>";
-}
+// String Helper::generateIndexPage(bool autoRefresh) {
+//     String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+//     html += "<title>ESP32 Index</title>";
+//     if (autoRefresh) {
+//         html += "<meta http-equiv='refresh' content='5'>";
+//     }
+//     html += "<style>body{font-family:Arial;}table{width:100%;}</style>";
+//     html += "</head><body>";
+//     html += "<h1>ESP32 Index Page</h1>";
+//     html += "<p><a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a></p>";
+//     html += "<div id='fields'>" + generateFieldsTable(Controller::getModel().getFields()) + "</div>";
+//     html += "</body></html>";
+//     return html;
+// }
 
-// Standard HTML footer
-String Helper::htmlFooter() {
-    return "<hr/><footer><p>ESP32 Web Controller</p></footer></body></html>";
-}
+// String Helper::generateMetadataPage() {
+//     String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+//     html += "<title>Metadata Editor</title>";
+//     html += "<style>body{font-family:Arial;}table{width:100%;}</style>";
+//     html += "</head><body>";
+//     html += "<h1>Metadata Page</h1>";
+//     html += "<p><a href='/'>Index</a> | <a href='/debug'>Debug</a></p>";
+//     html += "<div id='metadata'>" + generateFieldsTable(Controller::getModel().getFields()) + "</div>";
+//     html += "</body></html>";
+//     return html;
+// }
+
+// String Helper::generateDebugPage() {
+//     String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+//     html += "<title>Debug Page</title>";
+//     html += "<style>body{font-family:Arial; white-space: pre-wrap;}</style>";
+//     html += "</head><body>";
+//     html += "<h1>Debug / Logs</h1>";
+//     html += "<p><a href='/'>Index</a> | <a href='/metadata'>Metadata</a></p>";
+//     html += "<div id='logs'>[Logs will appear here]</div>";
+//     html += "</body></html>";
+//     return html;
+// }

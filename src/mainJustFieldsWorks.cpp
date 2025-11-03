@@ -90,7 +90,7 @@ class Model {
         f.readBytes(buf.get(), size);
         buf[size] = 0;
         f.close();
-        DynamicJsonDocument doc(4096);
+        JsonDocument doc;
         if (deserializeJson(doc, buf.get())) return false;
         fields.clear();
         for (JsonObject fld : doc["fields"].as<JsonArray>()) {
@@ -102,10 +102,11 @@ class Model {
     }
 
     bool save() {
-        DynamicJsonDocument doc(4096);
-        JsonArray arr = doc.createNestedArray("fields");
+        JsonDocument doc;
+
+        JsonArray arr = doc["fields"].to<JsonArray>();
         for (auto& f : fields) {
-            JsonObject obj = arr.createNestedObject();
+            JsonObject obj = arr.add<JsonObject>();
             f.toJson(obj);
         }
         File f = SPIFFS.open("/model.json", "w");
@@ -116,10 +117,10 @@ class Model {
     }
 
     String toJsonString() {
-        DynamicJsonDocument doc(4096);
-        JsonArray arr = doc.createNestedArray("fields");
+        JsonDocument doc;
+        JsonArray arr = doc["fields"].to<JsonArray>();
         for (auto& f : fields) {
-            JsonObject obj = arr.createNestedObject();
+            JsonObject obj = arr.add<JsonObject>();
             f.toJson(obj);
         }
         String s;
@@ -220,30 +221,26 @@ String generateDebugPage() {
 // ----------------------
 class BackEnd {
    public:
-    static unsigned long durationSinceReboot;
+    static unsigned long durationSinceRebootInSeconds;
 
     static void setupBackend() {
-        durationSinceReboot = 0;
+        durationSinceRebootInSeconds = 0;
         Serial.println("[BACKEND] Backend initialized.");
     }
 
     static void loopBackend() {
-        while (true) {
-            durationSinceReboot = millis() / 1000;
-
-            static unsigned long lastModelUpdate = 0;
-            if (durationSinceReboot - lastModelUpdate >= 5) {
-                lastModelUpdate = durationSinceReboot;
-                Serial.println("[BACKEND] 100 second stop start.");
-                delay(100000);  // ensure we are in the next second
-                Serial.println("[BACKEND] finished 100 second stop.");
+        while (true) {  // real backend FOREVER loop
+            durationSinceRebootInSeconds = millis() / 1000;
+            static unsigned long lastModelUpdateInSeconds = 0;
+            if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {  // we update the duration every 5 seconds
+                lastModelUpdateInSeconds = durationSinceRebootInSeconds;
                 Field* f = model.getByName("duration");
                 if (!f) {
                     Field nf;
                     nf.id = "10";
                     nf.name = "duration";
                     nf.type = "string";
-                    nf.value = String(durationSinceReboot);
+                    nf.value = String(durationSinceRebootInSeconds);
                     nf.description = "time since start";
                     nf.readOnly = true;
                     model.add(nf);
@@ -251,17 +248,39 @@ class BackEnd {
                     webSocket.broadcastTXT(model.toJsonString().c_str());
                     Serial.printf("[BACKEND] Created field 'duration' = %s\n", nf.value.c_str());
                 } else {
-                    f->value = String(durationSinceReboot);
+                    f->value = String(durationSinceRebootInSeconds);
                     model.save();
                     webSocket.broadcastTXT(model.toJsonString().c_str());
                     Serial.printf("[BACKEND] Updated field 'duration' = %s\n", f->value.c_str());
                 }
             }
-            delay(1000);
+            // make sure we have a delay in the model. If not prepopulate with n seconds
+            Field* f = model.getByName("delay");
+            String delayAsString;
+            if (!f) {
+                Field nf;
+                nf.id = "11";
+                nf.name = "delay";
+                nf.type = "string";
+                nf.value = String(7);
+                nf.description = "blocking delay in the backEndLoop";
+                nf.readOnly = true;
+                model.add(nf);
+                model.save();
+                webSocket.broadcastTXT(model.toJsonString().c_str());
+                Serial.printf("[BACKEND] Added field 'delay' = %s\n", nf.value.c_str());
+                delayAsString = nf.value;
+            } else {
+                delayAsString = f->value;
+            }
+            int delayAsInt = delayAsString.toInt()*1000;
+            Serial.println("[BACKEND] blocking delay of" + delayAsString + " started.");
+            delay(delayAsInt);  // this is to test that we can still update from ui and serial immediatly even if this loop is blocked
+            Serial.println("[BACKEND] blocking delay ended.");
         }
     }
 };
-unsigned long BackEnd::durationSinceReboot = 0;
+unsigned long BackEnd::durationSinceRebootInSeconds = 0;
 
 // ----------------------
 // Setup
@@ -320,7 +339,7 @@ void setup() {
     webSocket.begin();
     webSocket.onEvent([](uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
         if (type == WStype_TEXT) {
-            DynamicJsonDocument doc(1024);
+            JsonDocument doc;
             deserializeJson(doc, payload);
             String action = doc["action"] | "";
             if (action == "update") {

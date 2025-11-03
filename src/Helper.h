@@ -1,19 +1,23 @@
-#pragma once
-#include <vector>
-#include <String.h>
-#include "Field.h"
+// #pragma once
+// #include <Arduino.h>
 
-class Helper {
-public:
-    // Return the default set of fields
-    static std::vector<Field> defaultFields();
+// #include "Field.h"
 
-    // Generate the HTML menu/navigation
-    static String generateMenu();
+// class Helper {
+//    public:
+//     // Generate the main index page
+//     static String generateIndexPage(bool autoRefresh = false);
 
-    // Generate HTML page header
-    static String htmlHeader(const String& title);
+//     // Generate the metadata editor page
+//     static String generateMetadataPage();
 
-    // Generate HTML page footer
-    static String htmlFooter();
-};
+//     // Generate a debug/log page
+//     static String generateDebugPage();
+
+//     // Helper to generate HTML table rows for a vector of Fields
+//     static String generateFieldsTable(const std::vector<Field>& fields);
+
+//    private:
+//     // Escape HTML characters
+//     static String htmlEscape(const String& input);
+// };

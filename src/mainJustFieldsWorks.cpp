@@ -84,9 +84,14 @@ String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info<
 
 String generateIndexPage(bool brief) {
     String html = generateMenu();
-    html += "<h1>Index Page</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
+    if (brief) {
+        html += "<h1>Index Page</h1>";
+    } else {
+        html += "<h1>Info Page</h1>";
+    }
+    html += "<table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
     for (auto& f : model.fields) {
-        if (brief && f.getReadOnly()) continue;
+        if (!brief && f.getReadOnly()) continue;
         html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
         if (f.getReadOnly())
             html += "<td><input value='" + f.getValue() + "' disabled></td>";
@@ -95,46 +100,111 @@ String generateIndexPage(bool brief) {
         html += "<td>" + f.getDescription() + "</td></tr>";
     }
     html += R"(<script>
-function onChange(el){var val=el.value;var id=el.getAttribute('data-id');ws.send(JSON.stringify({action:'update',id:id,value:val}));}
-var ws=new WebSocket('ws://'+location.hostname+'/ws');
-ws.onmessage=function(evt){
-    var data = JSON.parse(evt.data);
-    data.forEach(f=>{
-        var el=document.querySelector('input[data-id="'+f.id+'"]');
-        if(el && el!==document.activeElement) el.value=f.value;
-    });
+var ws = new WebSocket('ws://' + location.hostname + '/ws');
+ws.onmessage = function(evt) {
+    try {
+        var data = JSON.parse(evt.data);
+        if (!Array.isArray(data)) return;
+        data.forEach(f => {
+            var el = document.querySelector("input[data-id='" + f.id + "']");
+            if (el) 
+                el.value = f.value;
+        });
+    } catch(e) {
+        console.error("WS update error:", e);
+    }
 };
+function onChange(el){
+    var val = el.value;
+    var id = el.getAttribute('data-id');
+    ws.send(JSON.stringify({action:'update',id:id,value:val}));
+}
 </script>)";
     return html;
 }
-
 String generateMetadataPage() {
-    String html = generateMenu();
-    html += "<h1>Metadata</h1><table border=1><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr>";
+    String html;
+    html += "<h1>Metadata</h1>";
+    html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/debug'>Debug</a></p>";
+    html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : model.fields) {
-        html += "<tr><td>" + f.getId() + "</td><td>" + f.getName() + "</td><td>" + f.getType() + "</td><td>" + f.getValue() + "</td><td>" + f.getDescription() + "</td><td>" + String(f.getReadOnly()) + "</td>";
+        html += "<tr>";
+        html += "<td>" + f.getId() + "</td>";
+        html += "<td>" + f.getName() + "</td>";
+        html += "<td>" + f.getType() + "</td>";
+        html += "<td>" + f.getValue() + "</td>";
+        html += "<td>" + f.getDescription() + "</td>";
+        html += "<td>" + String(f.getReadOnly()) + "</td>";
         html += "<td><button onclick='reorder(\"" + f.getId() + "\",true)'>&#9650;</button><button onclick='reorder(\"" + f.getId() + "\",false)'>&#9660;</button></td>";
-        html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td></tr>";
+        html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td>";
+        html += "</tr>";
     }
-    html += "</table><h3>Add New Field</h3>ID:<input id='fid'><br>Name:<input id='fname'><br>Type:<input id='ftype'><br>Value:<input id='fvalue'><br>Description:<input id='fdesc'><br>ReadOnly:<input id='freadonly' type='checkbox'><br><button onclick='addField()'>Add Field</button>";
-    html += R"(<script>
-var ws=new WebSocket('ws://'+location.hostname+'/ws');
+    html += "</tbody></table>";
+    html += "<h3>Add New Field</h3>";
+    html += "ID: <input id='fid'><br>";
+    html += "Name: <input id='fname'><br>";
+    html += "Type: <input id='ftype'><br>";
+    html += "Value: <input id='fvalue'><br>";
+    html += "Description: <input id='fdesc'><br>";
+    html += "ReadOnly: <input id='freadonly' type='checkbox'><br>";
+    html += "<button onclick='addField()'>Add Field</button>";
+    html += R"rawliteral(
+<script>
+var ws = new WebSocket('ws://' + location.hostname + '/ws');
+ws.onmessage = function(evt){
+    try{
+        var data = JSON.parse(evt.data);
+        if(!Array.isArray(data)) return;
+        var tbody = document.querySelector('#meta-body');
+        if(!tbody) return;
+        tbody.innerHTML = "";
+        data.forEach(f=>{
+            var row = document.createElement("tr");
+            row.innerHTML =
+                "<td>"+f.id+"</td>"+
+                "<td>"+f.name+"</td>"+
+                "<td>"+f.type+"</td>"+
+                "<td>"+f.value+"</td>"+
+                "<td>"+f.description+"</td>"+
+                "<td>"+f.readOnly+"</td>"+
+                "<td><button onclick='reorder(\""+f.id+"\",true)'>&#9650;</button>"+
+                "<button onclick='reorder(\""+f.id+"\",false)'>&#9660;</button></td>"+
+                "<td><button onclick='delField(\""+f.id+"\")'>Delete</button></td>";
+            tbody.appendChild(row);
+        });
+    }catch(e){console.error(e);}
+};
 function delField(id){ws.send(JSON.stringify({action:'delete',id:id}));}
 function reorder(id,up){ws.send(JSON.stringify({action:up?'moveUp':'moveDown',id:id}));}
-function addField(){var msg={action:'add',field:{id:fid.value,name:fname.value,type:ftype.value,value:fvalue.value,description:fdesc.value,readOnly:freadonly.checked}};ws.send(JSON.stringify(msg));}
-ws.onmessage=function(evt){
-    // For now, refresh metadata only if not editing
-    if(!document.activeElement || document.activeElement.tagName!=='INPUT'){
-        location.reload();
+function addField(){
+    var fid=document.getElementById('fid').value.trim();
+    if(!fid){
+        var maxId=0;
+        document.querySelectorAll('#meta-body tr td:first-child').forEach(td=>{
+            var n=parseInt(td.innerText);
+            if(!isNaN(n)&&n>maxId) maxId=n;
+        });
+        fid=(maxId+1).toString();
+        document.getElementById('fid').value=fid;
     }
-};
-</script>)";
+    var msg={action:'add',field:{
+        id:fid,
+        name:document.getElementById('fname').value,
+        type:document.getElementById('ftype').value,
+        value:document.getElementById('fvalue').value,
+        description:document.getElementById('fdesc').value,
+        readOnly:document.getElementById('freadonly').checked
+    }};
+    ws.send(JSON.stringify(msg));
+}
+</script>
+)rawliteral";
     return html;
 }
 
 String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + model.toJson() + "</pre>"; }
 
-void handleWebSocketMessage(String msg) {
+void handleWebSocketMessage(String msg) {// from the UI
     JsonDocument doc;
     if (deserializeJson(doc, msg)) return;
     String action = doc["action"] | "";
@@ -183,7 +253,7 @@ class BackEnd {
                 lastModelUpdateInSeconds = durationSinceRebootInSeconds;
                 Field* f = model.getByName("duration");
                 if (!f) {
-                    Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", true);
+                    Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
                     model.add(nf);
                 } else
                     f->setValue(String(durationSinceRebootInSeconds));
@@ -198,10 +268,12 @@ class BackEnd {
                 model.saveToFile();
                 webSocket.textAll(model.toJson());
                 delayAsString = nf.getValue();
-            } else
+            } else {
                 delayAsString = f->getValue();
+            }
             int delayAsInt = delayAsString.toInt() * 1000;
             Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
+            webSocket.textAll(model.toJson());
             delay(delayAsInt);
         }
     }
@@ -268,6 +340,8 @@ void loop() {
             model.listSerial();
         else if (line == "j")
             Serial.println(model.toJson());
+        else if (line == "upload ")
+            Serial.println(model.toJson());
         else if (line.startsWith("add ")) {
             Field f;
             f.setReadOnly(false);
@@ -283,6 +357,8 @@ void loop() {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
                 f.setId(line.substring(idx + 3, e));
+            }else{
+                
             }
             idx = line.indexOf("type=");
             if (idx >= 0) {

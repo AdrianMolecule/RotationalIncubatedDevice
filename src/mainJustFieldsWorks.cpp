@@ -11,7 +11,7 @@
 #include "JsonWrapper.h"
 #include "pass.h"
 
-//Adrian next I'll remove the unnecessary socket server
+// Adrian next I'll remove the unnecessary socket server
 
 // ----------------------
 // Field and Model Classes
@@ -57,28 +57,26 @@ class Model {
         }
     }
 
+    void loadDefaults() {
+        Serial.println("[MODEL] Loading factory default");
+        Field f1{"1", "Temperature", "float", "22.5", "Room temp", true};
+        Field f2{"2", "Enabled", "bool", "true", "System enabled", false};
+        Field f3{"3", "a", "string", "a", "short field", false};
+        Field f4{"4", "Count", "int", "42", "Event counter", false};
+        fields.push_back(f1);
+        fields.push_back(f2);
+        fields.push_back(f3);
+        fields.push_back(f4);
+        JsonWrapper::saveModelToFile(fields);
+    }
+
     bool load() {
-        if (!SPIFFS.exists("/model.json")) return false;
-        File f = SPIFFS.open("/model.json", "r");
-        if (!f) return false;
-        size_t size = f.size();
-        if (size == 0) {
-            f.close();
+        JsonWrapper::loadFieldsFromFile(fields);
+        if (fields.empty()) {
+            loadDefaults();
             return false;
         }
-        std::unique_ptr<char[]> buf(new char[size + 1]);
-        f.readBytes(buf.get(), size);
-        buf[size] = 0;
-        f.close();
-        JsonDocument doc;
-        if (deserializeJson(doc, buf.get())) return false;
-        fields.clear();
-        for (JsonObject fld : doc["fields"].as<JsonArray>()) {
-            Field f;
-            f.fromJson(fld);
-            fields.push_back(f);
-        }
-        return !fields.empty();
+        return true;
     }
 
     bool saveToFile() {
@@ -87,8 +85,7 @@ class Model {
             Serial.println("error in model saveToFile file");
             return false;
         }
-        return JsonWrapper::saveModelToFile("/model.json", fields);
-        return true;
+        return JsonWrapper::saveModelToFile(fields);
     }
 
     String fieldsToJsonString() {
@@ -98,7 +95,7 @@ class Model {
     void listSerial() {
         for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
     }
-};
+};// end Model 
 
 Model model;
 
@@ -147,7 +144,7 @@ String generateMetadataPage() {
     html += "<h1>Metadata</h1><table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr>";
     for (auto& f : model.fields) {
         html += "<tr>";
-        html += "<td>" + f.getName()+ "</td><td>" + f.getType() + "</td><td>" + f.getValue() + "</td><td>" + f.getDescription() + "</td>";
+        html += "<td>" + f.getName() + "</td><td>" + f.getType() + "</td><td>" + f.getValue() + "</td><td>" + f.getDescription() + "</td>";
         html += "<td>" + String(f.getReadOnly()) + "</td>";
         html += "<td><button onclick='reorder(\"" + f.getId() + "\",true)'>&#9650;</button> <button onclick='reorder(\"" + f.getId() + "\",false)'>&#9660;</button></td>";
         html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td>";
@@ -270,18 +267,7 @@ void setup() {
     else
         Serial.println("[SPIFFS] Mounted successfully.");
 
-    if (!model.load()) {
-        Serial.println("[MODEL] Loading factory default");
-        Field f1{"1", "Temperature", "float", "22.5", "Room temp", false};
-        Field f2{"2", "Enabled", "bool", "true", "System enabled", false};
-        Field f3{"3", "DeviceID", "string", "ESP32-001", "Identifier", true};
-        Field f4{"4", "Count", "int", "42", "Event counter", false};
-        model.add(f1);
-        model.add(f2);
-        model.add(f3);
-        model.add(f4);
-        model.saveToFile();
-    }
+    model.load();
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });

@@ -1,33 +1,31 @@
-// #pragma once
-// #include <ArduinoJson.h>
+#pragma once
+#include <ArduinoJson.h>
+#include <vector>
+#include "Field.h"
 
-// #include <vector>
+class JsonWrapper {
+   public:
+    // Convert vector of Fields → JSON string
+    static String fieldsToJsonString(const std::vector<Field>& fields);
 
-// #include "Field.h"
+    // Convert a single Field → JSON string
+    static String fieldToJsonString(const Field& f);
 
-// class JsonWrapper {
-//    public:
-//     // Convert vector of Fields → JSON string
-//     static String fieldsToJsonString(const std::vector<Field>& fields);
+    // Parse JSON string → single Field
+    static bool jsonToField(const String& jsonStr, Field& f);
 
-//     // Convert a single Field → JSON string
-//     static String fieldToJsonString(const Field& f);
+    // Parse JSON string → vector<Field>
+    static bool jsonToFields(const String& jsonStr, std::vector<Field>& fields);
 
-//     // Parse JSON string → single Field
-//     static bool jsonToField(const String& jsonStr, Field& f);
+    // Generate JSON for delete action
+    static String deleteFieldJson(const String& id);
 
-//     // Parse JSON string → vector<Field>
-//     static bool jsonToFields(const String& jsonStr, std::vector<Field>& fields);
+    // Generate JSON for update action
+    static String updateFieldJson(const Field& f);
 
-//     // Generate JSON for delete action
-//     static String deleteFieldJson(const String& id);
+    // Save fields to SPIFFS file
+    static bool saveModelToFile(const std::vector<Field>& fields);
 
-//     // Generate JSON for update action
-//     static String updateFieldJson(const Field& f);
-
-//     // Save fields to SPIFFS file
-//     static bool saveModelToFile(const char* path, const std::vector<Field>& fields);
-
-//     // Load fields from SPIFFS file
-//     static bool loadModelFromFile(const char* path, std::vector<Field>& fields);
-// };
+    // Load fields from SPIFFS file
+    static bool loadFieldsFromFile( std::vector<Field>& fields);
+};

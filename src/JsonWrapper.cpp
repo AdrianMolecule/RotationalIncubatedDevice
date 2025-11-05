@@ -2,7 +2,7 @@
 #include <SPIFFS.h>
 
 const char* FILE_LOCATION = "/model.json";
-String JsonWrapper::fieldsToJsonString(const std::vector<Field>& fields) {
+String JsonWrapper::toJsonString(const std::vector<Field>& fields) {
     JsonDocument doc;  // sufficient size for fields
     JsonArray arr = doc.to<JsonArray>();
     for (const auto& f : fields) {
@@ -94,7 +94,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
         Serial.println("Error when trying to open the saveto file. Maybe the location of:" + String(FILE_LOCATION)+ " is not correct or possible");
         return false;
     }
-    String s = fieldsToJsonString(fields);
+    String s = toJsonString(fields);
     file.print(s);
     file.close();
     return true;

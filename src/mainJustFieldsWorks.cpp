@@ -7,84 +7,16 @@
 
 #include <vector>
 
+#include "BackEnd.h"
+//#include "Controller.h"
 #include "Field.h"
 #include "Helper.h"
 #include "JsonWrapper.h"
+#include "Model.h"
 #include "pass.h"
 
-AsyncWebServer server(80);
-AsyncWebSocket webSocket("/ws");
-
-class Model {
-   public:
-    std::vector<Field> fields;
-    Field* getById(const String& id) {
-        for (auto& f : fields)
-            if (f.getId() == id) return &f;
-        return nullptr;
-    }
-    Field* getByName(const String& name) {
-        for (auto& f : fields)
-            if (f.getName() == name) return &f;
-        return nullptr;
-    }
-    void add(const Field& f) { fields.push_back(f); }
-    bool remove(const String& id) {
-        for (size_t i = 0; i < fields.size(); i++) {
-            if (fields[i].getId() == id) {
-                fields.erase(fields.begin() + i);
-                return true;
-            }
-        }
-        return false;
-    }
-    void reorder(const String& id, bool up) {
-        for (size_t i = 0; i < fields.size(); i++) {
-            if (fields[i].getId() == id) {
-                if (up && i > 0)
-                    std::swap(fields[i], fields[i - 1]);
-                else if (!up && i < fields.size() - 1)
-                    std::swap(fields[i], fields[i + 1]);
-                break;
-            }
-        }
-    }
-    void initialize() {
-        fields.clear();
-        Helper::initialize(fields);
-        saveToFile();
-    }
-
-    bool load() {
-        if (!SPIFFS.exists("/model.json")) return false;
-        File f = SPIFFS.open("/model.json", "r");
-        if (!f) return false;
-        size_t size = f.size();
-        if (size == 0) {
-            f.close();
-            return false;
-        }
-        std::unique_ptr<char[]> buf(new char[size + 1]);
-        f.readBytes(buf.get(), size);
-        buf[size] = 0;
-        f.close();
-        JsonDocument doc;
-        if (deserializeJson(doc, buf.get())) return false;
-        fields.clear();
-        for (JsonObject fld : doc["fields"].as<JsonArray>()) {
-            Field field;
-            field.fromJson(fld);
-            fields.push_back(field);
-        }
-        return !fields.empty();
-    }
-    bool saveToFile() { return JsonWrapper::saveModelToFile(fields); }
-    String toJson() { return JsonWrapper::fieldsToJsonString(fields); }
-    void listSerial() {
-        for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
-    }
-};
-
+AsyncWebServer server(80);            // needs to persist beyond the method
+AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};
 Model model;
 
 String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>"; }
@@ -97,7 +29,7 @@ String generateIndexPage(bool brief) {
         html += "<h1>Info Page</h1>";
     }
     html += "<table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
-    for (auto& f : model.fields) {
+    for (auto& f : model.getFields()) {
         if (!brief && f.getReadOnly()) continue;
         html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
         if (f.getReadOnly())
@@ -107,26 +39,26 @@ String generateIndexPage(bool brief) {
         html += "<td>" + f.getDescription() + "</td></tr>";
     }
     html += R"(<script>
-var ws = new WebSocket('ws://' + location.hostname + '/ws');
-ws.onmessage = function(evt) {
-    try {
-        var data = JSON.parse(evt.data);
-        if (!Array.isArray(data)) return;
-        data.forEach(f => {
-            var el = document.querySelector("input[data-id='" + f.id + "']");
-            if (el) 
+    var ws = new WebSocket('ws://' + location.hostname + '/ws');
+    ws.onmessage = function(evt) {
+        try {
+            var data = JSON.parse(evt.data);
+            if (!Array.isArray(data)) return;
+            data.forEach(f => {
+                var el = document.querySelector("input[data-id='" + f.id + "']");
+                if (el) 
                 el.value = f.value;
-        });
-    } catch(e) {
-        console.error("WS update error:", e);
-    }
-};
-function onChange(el){
-    var val = el.value;
-    var id = el.getAttribute('data-id');
-    ws.send(JSON.stringify({action:'update',id:id,value:val}));
-}
-</script>)";
+                });
+                } catch(e) {
+                    console.error("WS update error:", e);
+                    }
+                    };
+                    function onChange(el){
+                        var val = el.value;
+                        var id = el.getAttribute('data-id');
+                        ws.send(JSON.stringify({action:'update',id:id,value:val}));
+                        }
+                        </script>)";
     return html;
 }
 String generateMetadataPage() {
@@ -134,7 +66,7 @@ String generateMetadataPage() {
     html += "<h1>Metadata</h1>";
     html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/debug'>Debug</a></p>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
-    for (auto& f : model.fields) {
+    for (auto& f : model.getFields()) {
         html += "<tr>";
         html += "<td>" + f.getId() + "</td>";
         html += "<td>" + f.getName() + "</td>";
@@ -156,9 +88,9 @@ String generateMetadataPage() {
     html += "ReadOnly: <input id='freadonly' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
     html += R"rawliteral(
-<script>
-var ws = new WebSocket('ws://' + location.hostname + '/ws');
-ws.onmessage = function(evt){
+                            <script>
+                            var ws = new WebSocket('ws://' + location.hostname + '/ws');
+                            ws.onmessage = function(evt){
     try{
         var data = JSON.parse(evt.data);
         if(!Array.isArray(data)) return;
@@ -168,29 +100,29 @@ ws.onmessage = function(evt){
         data.forEach(f=>{
             var row = document.createElement("tr");
             row.innerHTML =
-                "<td>"+f.id+"</td>"+
-                "<td>"+f.name+"</td>"+
-                "<td>"+f.type+"</td>"+
-                "<td>"+f.value+"</td>"+
-                "<td>"+f.description+"</td>"+
-                "<td>"+f.readOnly+"</td>"+
-                "<td><button onclick='reorder(\""+f.id+"\",true)'>&#9650;</button>"+
-                "<button onclick='reorder(\""+f.id+"\",false)'>&#9660;</button></td>"+
-                "<td><button onclick='delField(\""+f.id+"\")'>Delete</button></td>";
+            "<td>"+f.id+"</td>"+
+            "<td>"+f.name+"</td>"+
+            "<td>"+f.type+"</td>"+
+            "<td>"+f.value+"</td>"+
+            "<td>"+f.description+"</td>"+
+            "<td>"+f.readOnly+"</td>"+
+            "<td><button onclick='reorder(\""+f.id+"\",true)'>&#9650;</button>"+
+            "<button onclick='reorder(\""+f.id+"\",false)'>&#9660;</button></td>"+
+            "<td><button onclick='delField(\""+f.id+"\")'>Delete</button></td>";
             tbody.appendChild(row);
-        });
-    }catch(e){console.error(e);}
-};
-function delField(id){ws.send(JSON.stringify({action:'delete',id:id}));}
-function reorder(id,up){ws.send(JSON.stringify({action:up?'moveUp':'moveDown',id:id}));}
-function addField(){
-    var fid=document.getElementById('fid').value.trim();
-    if(!fid){
-        var maxId=0;
-        document.querySelectorAll('#meta-body tr td:first-child').forEach(td=>{
-            var n=parseInt(td.innerText);
-            if(!isNaN(n)&&n>maxId) maxId=n;
-        });
+            });
+            }catch(e){console.error(e);}
+            };
+            function delField(id){ws.send(JSON.stringify({action:'delete',id:id}));}
+            function reorder(id,up){ws.send(JSON.stringify({action:up?'moveUp':'moveDown',id:id}));}
+            function addField(){
+                var fid=document.getElementById('fid').value.trim();
+                if(!fid){
+                    var maxId=0;
+                    document.querySelectorAll('#meta-body tr td:first-child').forEach(td=>{
+                        var n=parseInt(td.innerText);
+                        if(!isNaN(n)&&n>maxId) maxId=n;
+                        });
         fid=(maxId+1).toString();
         document.getElementById('fid').value=fid;
     }
@@ -201,26 +133,27 @@ function addField(){
         value:document.getElementById('fvalue').value,
         description:document.getElementById('fdesc').value,
         readOnly:document.getElementById('freadonly').checked
-    }};
-    ws.send(JSON.stringify(msg));
-    // clear inputs after sending
-    document.getElementById('fid').value="";
-    document.getElementById('fname').value="";
-    document.getElementById('ftype').value="";
-    document.getElementById('fvalue').value="";
-    document.getElementById('fdesc').value="";
-    document.getElementById('freadonly').checked=false;
-}
-</script>
-)rawliteral";
+        }};
+        ws.send(JSON.stringify(msg));
+        // clear inputs after sending
+        document.getElementById('fid').value="";
+        document.getElementById('fname').value="";
+        document.getElementById('ftype').value="";
+        document.getElementById('fvalue').value="";
+        document.getElementById('fdesc').value="";
+        document.getElementById('freadonly').checked=false;
+        }
+        </script>
+        )rawliteral";
 
     return html;
 }
 
-String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + model.toJson() + "</pre>"; }
+String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + model.toJsonString() + "</pre>"; }
 
 void handleWebSocketMessage(String msg) {  // from the UI
     JsonDocument doc;
+    Model m = model;
     if (deserializeJson(doc, msg)) return;
     String action = doc["action"] | "";
     if (action == "update") {
@@ -230,75 +163,33 @@ void handleWebSocketMessage(String msg) {  // from the UI
         if (f && !f->getReadOnly()) {
             f->setValue(val);
             model.saveToFile();
-            webSocket.textAll(model.toJson());
+            webSocket.textAll(model.toJsonString());
         }
     } else if (action == "delete") {
         String id = doc["id"] | "";
         if (model.remove(id)) {
             model.saveToFile();
-            webSocket.textAll(model.toJson());
+            webSocket.textAll(model.toJsonString());
         }
     } else if (action == "moveUp" || action == "moveDown") {
         String id = doc["id"] | "";
         model.reorder(id, action == "moveUp");
         model.saveToFile();
-        webSocket.textAll(model.toJson());
+        webSocket.textAll(model.toJsonString());
     } else if (action == "add") {
         JsonObject fld = doc["field"].as<JsonObject>();
         Field f;
         f.fromJson(fld);
         model.add(f);
         model.saveToFile();
-        webSocket.textAll(model.toJson());
+        webSocket.textAll(model.toJsonString());
     }
 }
 
-class BackEnd {
-   public:
-    static unsigned long durationSinceRebootInSeconds;
-    static void setupBackend() {
-        durationSinceRebootInSeconds = 0;
-        Serial.println("[BACKEND] Backend initialized.");
-    }
-    static void loopBackend() {
-        while (true) {
-            durationSinceRebootInSeconds = millis() / 1000;
-            static unsigned long lastModelUpdateInSeconds = 0;
-            if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {
-                lastModelUpdateInSeconds = durationSinceRebootInSeconds;
-                Field* f = model.getByName("duration");
-                if (!f) {
-                    Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
-                    model.add(nf);
-                } else
-                    f->setValue(String(durationSinceRebootInSeconds));
-                model.saveToFile();
-                webSocket.textAll(model.toJson());
-            }
-            Field* f = model.getByName("delay");
-            String delayAsString;
-            if (!f) {
-                Field nf("11", "delay", "string", "7", "blocking delay in backend", false);
-                model.add(nf);
-                model.saveToFile();
-                webSocket.textAll(model.toJson());
-                delayAsString = nf.getValue();
-            } else {
-                delayAsString = f->getValue();
-            }
-            int delayAsInt = delayAsString.toInt() * 1000;
-            Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
-            webSocket.textAll(model.toJson());
-            delay(delayAsInt);
-        }
-    }
-};
-unsigned long BackEnd::durationSinceRebootInSeconds = 0;
 // NTP Server settings
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;    // Set your GMT offset in seconds (e.g., EST is -5 hours * 3600 seconds/hour = -18000)
 const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seconds (e.g., 1 hour = 3600 seconds)
-
 void setup() {
     Serial.begin(115200);
     Serial.println("[SYS] Booting...");
@@ -327,44 +218,53 @@ void setup() {
         Serial.println("[FS] Mount failed!");
     else
         Serial.println("[FS] Mounted successfully.");
-    if (!model.load()) {
-        Serial.println("[MODEL] initializing with factory values");
-        model.initialize();
-    }
+    // TODO stop everyhing if no SPIFF
+    model.initializeSample();
+    Serial.println("model object created and content is:" + model.toBriefJsonString());
+    // Serial.println(Controller::webSocket.url());
+    // Serial.println("webSocket object created");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
+
+    // AsyncWebSocket w = Controller::webSocket;
     webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
     server.addHandler(&webSocket);
     server.begin();
-    BackEnd::setupBackend();
-    xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
+    // BackEnd::setupBackend();
+    //  xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
     Serial.println("[SYS] Setup complete.");
 }
 
-// -- -- -- -- -- -- -- -- -- -- --
-// Loop
-// ----------------------
+bool first = true;
 void loop() {
+    // AsyncWebSocket w = Controller::webSocket;
+    if (first) {
+        Serial.println("Model m = model;");
+        //Serial.println("AsyncWebSocket w = Controller::webSocket;");
+        Serial.println("in loop brief model via Controller is:" + model.toBriefJsonString());
+        Serial.println("in loop brief model via m is:" + model.toBriefJsonString());
+        first = false;
+    }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line == "m")
             model.listSerial();
         else if (line == "j")
-            Serial.println(model.toJson());
+            Serial.println(model.toJsonString());
         else if (line.startsWith("upload ")) {
             String jsonStr = line.substring(line.indexOf(' ') + 1);
             jsonStr.trim();
-            if (JsonWrapper::jsonToFields(jsonStr, model.fields)) {
-                JsonWrapper::saveModelToFile(model.fields);
-                Serial.println("New replaced Json:" + String(model.toJson()));
+            if (JsonWrapper::jsonToFields(jsonStr, model.getFields())) {
+                JsonWrapper::saveModelToFile(model.getFields());
+                Serial.println("New replaced Json:" + String(model.toJsonString()));
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }
-            webSocket.textAll(model.toJson());
+            webSocket.textAll(model.toJsonString());
         } else if (line.startsWith("add ")) {
             Field f;
             f.setReadOnly(false);
@@ -407,21 +307,22 @@ void loop() {
             }
             if (f.getName() != "") {
                 model.add(f);
-                model.saveToFile();
                 Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
-                webSocket.textAll(model.toJson());
+                model.saveToFile();
+                webSocket.textAll(model.toJsonString());
             }
         } else if (line.startsWith("delete ")) {
             String name = line.substring(7);
             Field* f = model.getByName(name);
             if (f) {
                 model.remove(f->getId());
-                model.saveToFile();
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
-                webSocket.textAll(model.toJson());
+                model.saveToFile();
+                webSocket.textAll(model.toJsonString());
             }
         } else if (line.startsWith("r")) {
             model.initialize();
+            Serial.printf("[SERIAL] Reinitialized the whole model");
         } else if (line.startsWith("?")) {
             Serial.println("\n--- Available Serial Commands ---");
             Serial.println("? or help          : Display this help message");
@@ -443,7 +344,7 @@ void loop() {
                     f->setValue(val);
                     model.saveToFile();
                     Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
-                    webSocket.textAll(model.toJson());
+                    webSocket.textAll(model.toJsonString());
                 }
             }
         }

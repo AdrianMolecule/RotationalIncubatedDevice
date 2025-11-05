@@ -1,7 +1,16 @@
+#pragma once
+#include "Field.h"
+#include "Helper.h"
+#include "JsonWrapper.h"
 
 class Model {
-   public:
+   private:
     std::vector<Field> fields;
+
+   public:
+    std::vector<Field>& getFields() {
+        return fields;
+    }
 
     Field* getById(const String& id) {
         for (auto& f : fields)
@@ -15,13 +24,17 @@ class Model {
         return nullptr;
     }
 
-    void add(Field f) { fields.push_back(f); }
+    void add(Field f) {
+        fields.push_back(f);
+        Serial.println("added field" + f.getName());
+    }
 
     bool remove(const String& id) {
         for (size_t i = 0; i < fields.size(); i++) {
             if (fields[i].getId() == id) {
                 fields.erase(fields.begin() + i);
                 return true;
+                Serial.println("removed field" + fields[i].getName());
             }
         }
         return false;
@@ -40,8 +53,13 @@ class Model {
     }
 
     void initialize() {
-        Serial.println("[MODEL] Loading factory model");
-        Helper::initialize(model.fields);
+        Serial.println("[MODEL] Initialize model by loading factory model");
+        Helper::initialize(fields);
+    }
+
+    void initializeSample() {
+        Serial.println("[MODEL] Initialize just SAMPLE model by loading factory model");
+        Helper::initializeSample(fields);
     }
 
     bool load() {
@@ -62,8 +80,16 @@ class Model {
         return JsonWrapper::saveModelToFile(fields);
     }
 
-    String fieldsToJsonString() {
-        return JsonWrapper::fieldsToJsonString(fields);
+    String toJsonString() {
+        return JsonWrapper::toJsonString(fields);
+    }
+    String toBriefJsonString() {
+        String result = "Brief for Fields size:" + String(fields.size());
+        if (fields.size() >= 2) {
+            result += ", " + fields.at(0).getName() + " ,";
+            result += fields.at(fields.size() - 1).getName();
+        }
+        return result;
     }
 
     void listSerial() {

@@ -15,41 +15,43 @@
 
 class BackEnd {
    public:
+    static inline unsigned long lastModelUpdateInSeconds = 0;
     static void setupBackend() {
         Serial.println("[SYS] BackEnd Setup complete.");
     }
+
+    static void loopBackend() {
+        Serial.println("[SYS] loopBackend Started.");
+        unsigned long durationSinceRebootInSeconds = millis() / 1000;
+        while (true) {
+            // if Controller::model.
+            durationSinceRebootInSeconds = millis() / 1000;
+            if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {
+                lastModelUpdateInSeconds = durationSinceRebootInSeconds;
+                Field* f = Controller::model.getByName("duration");
+                if (!f) {
+                    Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
+                    Controller::model.add(nf);
+                } else
+                    f->setValue(String(durationSinceRebootInSeconds));
+                Controller::model.saveToFile();
+                Controller::webSocket.textAll(Controller::model.toJsonString());
+            }
+            Field* f = Controller::model.getByName("delay");
+            String delayAsString;
+            if (!f) {
+                Field nf("11", "delay", "string", "7", "blocking delay in backend", false);
+                Controller::model.add(nf);
+                Controller::model.saveToFile();
+                Controller::webSocket.textAll(Controller::model.toJsonString());
+                delayAsString = nf.getValue();
+            } else {
+                delayAsString = f->getValue();
+            }
+            int delayAsInt = delayAsString.toInt() * 1000;
+            Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
+            Controller::webSocket.textAll(Controller::model.toJsonString());
+            delay(delayAsInt);
+        }
+    }
 };
-// static void loopBackend() {
-//     Serial.println("[SYS] loopBackend Started.");
-//     while (true) {
-//         if Controller::model.
-//         durationSinceRebootInSeconds = millis() / 1000;
-//         static unsigned long lastModelUpdateInSeconds = 0;
-//         if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {
-//             lastModelUpdateInSeconds = durationSinceRebootInSeconds;
-//             Field* f = model.getByName("duration");
-//             if (!f) {
-//                 Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
-//                 model.add(nf);
-//             } else
-//                 f->setValue(String(durationSinceRebootInSeconds));
-//             model.saveToFile();
-//             webSocket.textAll(model.toJson());
-//         }
-//         Field* f = model.getByName("delay");
-//         String delayAsString;
-//         if (!f) {
-//             Field nf("11", "delay", "string", "7", "blocking delay in backend", false);
-//             model.add(nf);
-//             model.saveToFile();
-//             webSocket.textAll(model.toJson());
-//             delayAsString = nf.getValue();
-//         } else {
-//             delayAsString = f->getValue();
-//         }
-//         int delayAsInt = delayAsString.toInt() * 1000;
-//         Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
-//         webSocket.textAll(model.toJson());
-//         delay(delayAsInt);
-//     }
-// }

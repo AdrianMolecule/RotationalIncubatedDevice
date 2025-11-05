@@ -16,7 +16,7 @@
 #include "pass.h"
 
 AsyncWebServer server(80);  // needs to persist beyond the method
-AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};
+
 
 String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>"; }
 
@@ -167,26 +167,26 @@ void handleWebSocketMessage(String msg) {  // from the UI
         if (f && !f->getReadOnly()) {
             f->setValue(val);
             Controller::model.saveToFile();
-            webSocket.textAll(Controller::model.toJsonString());
+            Controller::webSocket.textAll(Controller::model.toJsonString());
         }
     } else if (action == "delete") {
         String id = doc["id"] | "";
         if (Controller::model.remove(id)) {
             Controller::model.saveToFile();
-            webSocket.textAll(Controller::model.toJsonString());
+            Controller::webSocket.textAll(Controller::model.toJsonString());
         }
     } else if (action == "moveUp" || action == "moveDown") {
         String id = doc["id"] | "";
         Controller::model.reorder(id, action == "moveUp");
         Controller::model.saveToFile();
-        webSocket.textAll(Controller::model.toJsonString());
+        Controller::webSocket.textAll(Controller::model.toJsonString());
     } else if (action == "add") {
         JsonObject fld = doc["field"].as<JsonObject>();
         Field f;
         f.fromJson(fld);
         Controller::model.add(f);
         Controller::model.saveToFile();
-        webSocket.textAll(Controller::model.toJsonString());
+        Controller::webSocket.textAll(Controller::model.toJsonString());
     }
 }
 
@@ -225,17 +225,16 @@ void setup() {
     // TODO stop everyhing if no SPIFF
     Controller::model.initializeSample();
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
-    // Serial.println(Controller::webSocket.url());
-    // Serial.println("webSocket object created");
+    Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
 
-    // AsyncWebSocket w = Controller::webSocket;
-    webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
-    server.addHandler(&webSocket);
+    // AsyncWebSocket w = Controller::Controller::webSocket;
+    Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
+    server.addHandler(&Controller::webSocket);
     server.begin();
     BackEnd::setupBackend();
     //  xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
@@ -244,10 +243,10 @@ void setup() {
 
 bool first = true;
 void loop() {
-    // AsyncWebSocket w = Controller::webSocket;
+    // AsyncWebSocket w = Controller::Controller::webSocket;
     if (first) {
         Serial.println("Model m = Controller::model;");
-        // Serial.println("AsyncWebSocket w = Controller::webSocket;");
+        // Serial.println("AsyncWebSocket w = Controller::Controller::webSocket;");
         Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
         first = false;
     }
@@ -268,7 +267,7 @@ void loop() {
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }
-            webSocket.textAll(Controller::model.toJsonString());
+            Controller::webSocket.textAll(Controller::model.toJsonString());
         } else if (line.startsWith("add ")) {
             Field f;
             f.setReadOnly(false);
@@ -313,7 +312,7 @@ void loop() {
                 Controller::model.add(f);
                 Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
                 Controller::model.saveToFile();
-                webSocket.textAll(Controller::model.toJsonString());
+                Controller::webSocket.textAll(Controller::model.toJsonString());
             }
         } else if (line.startsWith("delete ")) {
             String name = line.substring(7);
@@ -322,7 +321,7 @@ void loop() {
                 Controller::model.remove(f->getId());
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
                 Controller::model.saveToFile();
-                webSocket.textAll(Controller::model.toJsonString());
+                Controller::webSocket.textAll(Controller::model.toJsonString());
             }
         } else if (line.startsWith("r")) {
             Controller::model.initialize();
@@ -348,7 +347,7 @@ void loop() {
                     f->setValue(val);
                     Controller::model.saveToFile();
                     Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
-                    webSocket.textAll(Controller::model.toJsonString());
+                    Controller::webSocket.textAll(Controller::model.toJsonString());
                 }
             }
         }

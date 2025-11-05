@@ -7,8 +7,9 @@
 class Controller {
    public:
     inline static Model model = Model{};
-    
+
     inline static AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};
+    
     // ^ Declare the variable here (doesn't allocate memory yet)
 
     // void incrementCounter() {

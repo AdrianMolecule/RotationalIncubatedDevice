@@ -8,16 +8,15 @@
 #include <vector>
 
 #include "BackEnd.h"
-//#include "Controller.h"
+#include "Controller.h"
 #include "Field.h"
 #include "Helper.h"
 #include "JsonWrapper.h"
 #include "Model.h"
 #include "pass.h"
 
-AsyncWebServer server(80);            // needs to persist beyond the method
+AsyncWebServer server(80);  // needs to persist beyond the method
 AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};
-Model model;
 
 String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>"; }
 
@@ -29,7 +28,7 @@ String generateIndexPage(bool brief) {
         html += "<h1>Info Page</h1>";
     }
     html += "<table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
-    for (auto& f : model.getFields()) {
+    for (auto& f : Controller::model.getFields()) {
         if (!brief && f.getReadOnly()) continue;
         html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
         if (f.getReadOnly())
@@ -39,26 +38,32 @@ String generateIndexPage(bool brief) {
         html += "<td>" + f.getDescription() + "</td></tr>";
     }
     html += R"(<script>
-    var ws = new WebSocket('ws://' + location.hostname + '/ws');
-    ws.onmessage = function(evt) {
+        var ws = new WebSocket('ws://' + location.hostname + '/ws');
+        ws.onmessage = function(evt) {
         try {
             var data = JSON.parse(evt.data);
             if (!Array.isArray(data)) return;
+            var inputs = document.querySelectorAll("input[data-id]");
+            // reload if number of fields changed (add or delete)
+            if (inputs.length != data.length) {
+                location.reload();
+                return;
+            }
+            // update only values for existing fields
             data.forEach(f => {
                 var el = document.querySelector("input[data-id='" + f.id + "']");
-                if (el) 
-                el.value = f.value;
-                });
-                } catch(e) {
-                    console.error("WS update error:", e);
-                    }
-                    };
-                    function onChange(el){
-                        var val = el.value;
-                        var id = el.getAttribute('data-id');
-                        ws.send(JSON.stringify({action:'update',id:id,value:val}));
-                        }
-                        </script>)";
+                if (el) el.value = f.value;
+            });
+        } catch(e) {
+            console.error("WS update error:", e);
+        }
+    };
+    function onChange(el){
+        var val = el.value;
+        var id = el.getAttribute('data-id');
+        ws.send(JSON.stringify({action:'update',id:id,value:val}));
+    }
+    </script>)";
     return html;
 }
 String generateMetadataPage() {
@@ -66,7 +71,7 @@ String generateMetadataPage() {
     html += "<h1>Metadata</h1>";
     html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/debug'>Debug</a></p>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
-    for (auto& f : model.getFields()) {
+    for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
         html += "<td>" + f.getId() + "</td>";
         html += "<td>" + f.getName() + "</td>";
@@ -149,40 +154,39 @@ String generateMetadataPage() {
     return html;
 }
 
-String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + model.toJsonString() + "</pre>"; }
+String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + Controller::model.toJsonString() + "</pre>"; }
 
 void handleWebSocketMessage(String msg) {  // from the UI
     JsonDocument doc;
-    Model m = model;
     if (deserializeJson(doc, msg)) return;
     String action = doc["action"] | "";
     if (action == "update") {
         String id = doc["id"] | "";
         String val = doc["value"] | "";
-        Field* f = model.getById(id);
+        Field* f = Controller::model.getById(id);
         if (f && !f->getReadOnly()) {
             f->setValue(val);
-            model.saveToFile();
-            webSocket.textAll(model.toJsonString());
+            Controller::model.saveToFile();
+            webSocket.textAll(Controller::model.toJsonString());
         }
     } else if (action == "delete") {
         String id = doc["id"] | "";
-        if (model.remove(id)) {
-            model.saveToFile();
-            webSocket.textAll(model.toJsonString());
+        if (Controller::model.remove(id)) {
+            Controller::model.saveToFile();
+            webSocket.textAll(Controller::model.toJsonString());
         }
     } else if (action == "moveUp" || action == "moveDown") {
         String id = doc["id"] | "";
-        model.reorder(id, action == "moveUp");
-        model.saveToFile();
-        webSocket.textAll(model.toJsonString());
+        Controller::model.reorder(id, action == "moveUp");
+        Controller::model.saveToFile();
+        webSocket.textAll(Controller::model.toJsonString());
     } else if (action == "add") {
         JsonObject fld = doc["field"].as<JsonObject>();
         Field f;
         f.fromJson(fld);
-        model.add(f);
-        model.saveToFile();
-        webSocket.textAll(model.toJsonString());
+        Controller::model.add(f);
+        Controller::model.saveToFile();
+        webSocket.textAll(Controller::model.toJsonString());
     }
 }
 
@@ -219,8 +223,8 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
-    model.initializeSample();
-    Serial.println("model object created and content is:" + model.toBriefJsonString());
+    Controller::model.initializeSample();
+    Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     // Serial.println(Controller::webSocket.url());
     // Serial.println("webSocket object created");
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
@@ -233,7 +237,7 @@ void setup() {
     webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
     server.addHandler(&webSocket);
     server.begin();
-    // BackEnd::setupBackend();
+    BackEnd::setupBackend();
     //  xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
     Serial.println("[SYS] Setup complete.");
 }
@@ -242,29 +246,29 @@ bool first = true;
 void loop() {
     // AsyncWebSocket w = Controller::webSocket;
     if (first) {
-        Serial.println("Model m = model;");
-        //Serial.println("AsyncWebSocket w = Controller::webSocket;");
-        Serial.println("in loop brief model via Controller is:" + model.toBriefJsonString());
-        Serial.println("in loop brief model via m is:" + model.toBriefJsonString());
+        Serial.println("Model m = Controller::model;");
+        // Serial.println("AsyncWebSocket w = Controller::webSocket;");
+        Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
         first = false;
     }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line == "m")
-            model.listSerial();
-        else if (line == "j")
-            Serial.println(model.toJsonString());
-        else if (line.startsWith("upload ")) {
+            Controller::model.listSerial();
+        else if (line == "j") {
+            Serial.println("memory model is:");
+            Serial.println(Controller::model.toJsonString());
+        } else if (line.startsWith("upload ")) {
             String jsonStr = line.substring(line.indexOf(' ') + 1);
             jsonStr.trim();
-            if (JsonWrapper::jsonToFields(jsonStr, model.getFields())) {
-                JsonWrapper::saveModelToFile(model.getFields());
-                Serial.println("New replaced Json:" + String(model.toJsonString()));
+            if (JsonWrapper::jsonToFields(jsonStr, Controller::model.getFields())) {
+                JsonWrapper::saveModelToFile(Controller::model.getFields());
+                Serial.println("New replaced Json:" + String(Controller::model.toJsonString()));
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }
-            webSocket.textAll(model.toJsonString());
+            webSocket.textAll(Controller::model.toJsonString());
         } else if (line.startsWith("add ")) {
             Field f;
             f.setReadOnly(false);
@@ -306,28 +310,29 @@ void loop() {
                 f.setReadOnly((line.substring(idx + 9, idx + 10) == "1"));
             }
             if (f.getName() != "") {
-                model.add(f);
-                model.saveToFile();
-                webSocket.textAll(model.toJsonString());
+                Controller::model.add(f);
+                Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
+                Controller::model.saveToFile();
+                webSocket.textAll(Controller::model.toJsonString());
             }
         } else if (line.startsWith("delete ")) {
             String name = line.substring(7);
-            Field* f = model.getByName(name);
+            Field* f = Controller::model.getByName(name);
             if (f) {
-                model.remove(f->getId());
+                Controller::model.remove(f->getId());
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
-                model.saveToFile();
-                webSocket.textAll(model.toJsonString());
+                Controller::model.saveToFile();
+                webSocket.textAll(Controller::model.toJsonString());
             }
         } else if (line.startsWith("r")) {
-            model.initialize();
-            Serial.printf("[SERIAL] Reinitialized the whole model");
+            Controller::model.initialize();
+            Serial.printf("[SERIAL] Reinitialized the whole Controller::model");
         } else if (line.startsWith("?")) {
             Serial.println("\n--- Available Serial Commands ---");
             Serial.println("? or help          : Display this help message");
-            Serial.println("m                  : List current model fields details");
-            Serial.println("j                  : Print full model as JSON string");
-            Serial.println("upload <json_str>  : Replace entire model with new JSON data");
+            Serial.println("m                  : List current Controller::model fields details");
+            Serial.println("j                  : Print full Controller::model as JSON string");
+            Serial.println("upload <json_str>  : Replace entire Controller::model with new JSON data");
             Serial.println("add name=... id=...: Add a new field (supply all params)");
             Serial.println("delete <name>      : Delete a field by name");
             Serial.println("<name>=<value>     : Update the value of an existing field");
@@ -338,12 +343,12 @@ void loop() {
             if (eq > 0) {
                 String name = line.substring(0, eq);
                 String val = line.substring(eq + 1);
-                Field* f = model.getByName(name);
+                Field* f = Controller::model.getByName(name);
                 if (f && !f->getReadOnly()) {
                     f->setValue(val);
-                    model.saveToFile();
+                    Controller::model.saveToFile();
                     Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
-                    webSocket.textAll(model.toJsonString());
+                    webSocket.textAll(Controller::model.toJsonString());
                 }
             }
         }

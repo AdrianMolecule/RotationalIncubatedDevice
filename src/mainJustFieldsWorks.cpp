@@ -307,7 +307,6 @@ void loop() {
             }
             if (f.getName() != "") {
                 model.add(f);
-                Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
                 model.saveToFile();
                 webSocket.textAll(model.toJsonString());
             }

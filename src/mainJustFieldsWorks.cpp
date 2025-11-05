@@ -232,21 +232,18 @@ void setup() {
     server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
 
-    // AsyncWebSocket w = Controller::Controller::webSocket;
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
     server.addHandler(&Controller::webSocket);
     server.begin();
     BackEnd::setupBackend();
-    //  xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
+    xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
     Serial.println("[SYS] Setup complete.");
 }
 
 bool first = true;
 void loop() {
-    // AsyncWebSocket w = Controller::Controller::webSocket;
     if (first) {
         Serial.println("Model m = Controller::model;");
-        // Serial.println("AsyncWebSocket w = Controller::Controller::webSocket;");
         Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
         first = false;
     }

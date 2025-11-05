@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "Field.h"
-#include "JsonWrapper.h"
 #include "Helper.h"
+#include "JsonWrapper.h"
 #include "pass.h"
 
 AsyncWebServer server(80);
@@ -49,6 +49,12 @@ class Model {
             }
         }
     }
+    void initialize() {
+        fields.clear();
+        Helper::initialize(fields);
+        saveToFile();
+    }
+
     bool load() {
         if (!SPIFFS.exists("/model.json")) return false;
         File f = SPIFFS.open("/model.json", "r");
@@ -310,7 +316,7 @@ void setup() {
         // Initialize and get the time from NTP server
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
-        Serial.println(" at:"+Helper::getTime());
+        Serial.println(" at:" + Helper::getTime());
         if (MDNS.begin("bio"))
             Serial.println("[mDNS] Registered as bio.local");
         else
@@ -322,16 +328,8 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     if (!model.load()) {
-        Serial.println("[MODEL] Loading defaults");
-        Field f1{"1", "Temperature", "float", "22.5", "Room temp", false};
-        Field f2{"2", "Enabled", "bool", "true", "System enabled", false};
-        Field f3{"3", "DeviceID", "string", "ESP32-001", "Identifier", true};
-        Field f4{"4", "x", "int", "0", "Event counter", false};
-        model.add(f1);
-        model.add(f2);
-        model.add(f3);
-        model.add(f4);
-        model.saveToFile();
+        Serial.println("[MODEL] initializing with factory values");
+        model.initialize();
     }
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
@@ -422,6 +420,8 @@ void loop() {
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
                 webSocket.textAll(model.toJson());
             }
+        } else if (line.startsWith("r")) {
+            model.initialize();
         } else if (line.startsWith("?")) {
             Serial.println("\n--- Available Serial Commands ---");
             Serial.println("? or help          : Display this help message");
@@ -431,6 +431,7 @@ void loop() {
             Serial.println("add name=... id=...: Add a new field (supply all params)");
             Serial.println("delete <name>      : Delete a field by name");
             Serial.println("<name>=<value>     : Update the value of an existing field");
+            Serial.println("r                  : reset reinitialize fields with factory setting");
             Serial.println("-----------------------------------\n");
         } else {
             int eq = line.indexOf('=');

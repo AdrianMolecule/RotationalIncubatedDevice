@@ -39,23 +39,15 @@ class Model {
         }
     }
 
-    void loadDefaults() {
-        Serial.println("[MODEL] Loading factory default");
-        Field f1{"1", "Temperature", "float", "22.5", "Room temp", true};
-        Field f2{"2", "Enabled", "bool", "true", "System enabled", false};
-        Field f3{"3", "a", "string", "a", "short field", false};
-        Field f4{"4", "Count", "int", "42", "Event counter", false};
-        fields.push_back(f1);
-        fields.push_back(f2);
-        fields.push_back(f3);
-        fields.push_back(f4);
-        JsonWrapper::saveModelToFile(fields);
+    void initialize() {
+        Serial.println("[MODEL] Loading factory model");
+        Helper::initialize(model.fields);
     }
 
     bool load() {
         JsonWrapper::loadFieldsFromFile(fields);
         if (fields.empty()) {
-            loadDefaults();
+            initialize();
             return false;
         }
         return true;
@@ -78,4 +70,3 @@ class Model {
         for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
     }
 };  // end Model
-

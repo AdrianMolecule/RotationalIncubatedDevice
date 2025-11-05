@@ -37,7 +37,7 @@ class Field {
 
     // Setters with logging
     void setValue(const String& val) {
-        Serial.printf("[Field] setValue: %s -> %s\n", value.c_str(), val.c_str());
+        Serial.printf("[Field] %s setValue: %s -> %s\n", name.c_str(), value.c_str(), val.c_str());
         value = val;
     }
 

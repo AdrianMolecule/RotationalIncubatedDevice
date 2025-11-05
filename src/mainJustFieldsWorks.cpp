@@ -9,6 +9,7 @@
 
 #include "Field.h"
 #include "JsonWrapper.h"
+#include "Helper.h"
 #include "pass.h"
 
 AsyncWebServer server(80);
@@ -196,15 +197,23 @@ function addField(){
         readOnly:document.getElementById('freadonly').checked
     }};
     ws.send(JSON.stringify(msg));
+    // clear inputs after sending
+    document.getElementById('fid').value="";
+    document.getElementById('fname').value="";
+    document.getElementById('ftype').value="";
+    document.getElementById('fvalue').value="";
+    document.getElementById('fdesc').value="";
+    document.getElementById('freadonly').checked=false;
 }
 </script>
 )rawliteral";
+
     return html;
 }
 
 String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + model.toJson() + "</pre>"; }
 
-void handleWebSocketMessage(String msg) {// from the UI
+void handleWebSocketMessage(String msg) {  // from the UI
     JsonDocument doc;
     if (deserializeJson(doc, msg)) return;
     String action = doc["action"] | "";
@@ -279,6 +288,10 @@ class BackEnd {
     }
 };
 unsigned long BackEnd::durationSinceRebootInSeconds = 0;
+// NTP Server settings
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -18000;    // Set your GMT offset in seconds (e.g., EST is -5 hours * 3600 seconds/hour = -18000)
+const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seconds (e.g., 1 hour = 3600 seconds)
 
 void setup() {
     Serial.begin(115200);
@@ -294,6 +307,10 @@ void setup() {
     Serial.println();
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        // Initialize and get the time from NTP server
+        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+        Serial.println(" at:"+Helper::getTime());
         if (MDNS.begin("bio"))
             Serial.println("[mDNS] Registered as bio.local");
         else
@@ -336,13 +353,21 @@ void loop() {
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
-        if (line == "?")
+        if (line == "m")
             model.listSerial();
         else if (line == "j")
             Serial.println(model.toJson());
-        else if (line == "upload ")
-            Serial.println(model.toJson());
-        else if (line.startsWith("add ")) {
+        else if (line.startsWith("upload ")) {
+            String jsonStr = line.substring(line.indexOf(' ') + 1);
+            jsonStr.trim();
+            if (JsonWrapper::jsonToFields(jsonStr, model.fields)) {
+                JsonWrapper::saveModelToFile(model.fields);
+                Serial.println("New replaced Json:" + String(model.toJson()));
+            } else {
+                Serial.println("New entered Json does not parse so Model remained unchanged");
+            }
+            webSocket.textAll(model.toJson());
+        } else if (line.startsWith("add ")) {
             Field f;
             f.setReadOnly(false);
             int idx;
@@ -357,8 +382,8 @@ void loop() {
                 int e = line.indexOf(" ", idx);
                 if (e < 0) e = line.length();
                 f.setId(line.substring(idx + 3, e));
-            }else{
-                
+            } else {
+                Serial.println("TODO should default the id if not present int the field");
             }
             idx = line.indexOf("type=");
             if (idx >= 0) {
@@ -397,6 +422,16 @@ void loop() {
                 Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
                 webSocket.textAll(model.toJson());
             }
+        } else if (line.startsWith("?")) {
+            Serial.println("\n--- Available Serial Commands ---");
+            Serial.println("? or help          : Display this help message");
+            Serial.println("m                  : List current model fields details");
+            Serial.println("j                  : Print full model as JSON string");
+            Serial.println("upload <json_str>  : Replace entire model with new JSON data");
+            Serial.println("add name=... id=...: Add a new field (supply all params)");
+            Serial.println("delete <name>      : Delete a field by name");
+            Serial.println("<name>=<value>     : Update the value of an existing field");
+            Serial.println("-----------------------------------\n");
         } else {
             int eq = line.indexOf('=');
             if (eq > 0) {

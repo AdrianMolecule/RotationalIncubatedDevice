@@ -6,7 +6,7 @@
 class JsonWrapper {
    public:
     // Convert vector of Fields → JSON string
-    static String fieldsToJsonString(const std::vector<Field>& fields);
+    static String toJsonString(const std::vector<Field>& fields);
 
     // Convert a single Field → JSON string
     static String fieldToJsonString(const Field& f);

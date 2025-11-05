@@ -3,12 +3,14 @@
 #include <time.h>
 
 const String NOT_PRESENT = String("255");
+uint8_t maxHeaterDutyCyclePercentage;
+int currentStepsPerRotation;
+unsigned long currentStartTime;  // time since ESP power on in millis
 
 class Helper {
    public:
     Helper() = default;
     static void initialize(std::vector<Field>& fields) {
-        Serial.println("[MODEL] Loading factory default");
         int idCounter = 0;
         // desired or set values
         fields.emplace_back(String(idCounter++), "desiredTemperature", "float", "37", "desired Temperature");
@@ -49,6 +51,13 @@ class Helper {
         uint8_t maxHeaterDutyCyclePercentage;
         int currentStepsPerRotation;
         unsigned long currentStartTime;  // time since ESP power on in millis
+    }
+    static void initializeSample(std::vector<Field>& fields) {
+        int idCounter = 0;
+        // desired or set values
+        fields.emplace_back(String(idCounter++), "a", "float", "37", "desired Temperature");
+        fields.emplace_back(String(idCounter++), "b", "int", "0", "b");
+        fields.emplace_back(String(idCounter++), "VERSION", "string", "1.1", "Version", true);
     }
 
     static String getTime() {

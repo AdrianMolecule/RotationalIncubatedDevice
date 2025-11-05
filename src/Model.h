@@ -26,7 +26,7 @@ class Model {
 
     void add(Field f) {
         fields.push_back(f);
-        Serial.println("added field" + f.getName());
+        Serial.println("[Model] added field " + f.getName());
     }
 
     bool remove(const String& id) {
@@ -34,7 +34,7 @@ class Model {
             if (fields[i].getId() == id) {
                 fields.erase(fields.begin() + i);
                 return true;
-                Serial.println("removed field" + fields[i].getName());
+                Serial.println("{Model] removed field " + fields[i].getName());
             }
         }
         return false;

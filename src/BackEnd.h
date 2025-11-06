@@ -15,11 +15,9 @@
 
 #include "ActualMusic.h"
 #include "Controller.h"
-#include "Field.h"
 #include "Helper.h"
-#include "JsonWrapper.h"
 #include "Microstepping.h"
-
+//
 void play(Melody melody);
 void play(Melody melody, bool force);
 void startStepper();
@@ -37,8 +35,8 @@ void writeFile(fs::FS& fs, const char* path, const String& message);
 String formatTime(unsigned long time);
 String getFormatedTimeSinceStart();
 String getDurationToAlarm();
-int readTurnOnStepper();
-void processStepperOnOffSwitch();
+int readTurnOnStepperButton();
+void processStepperStartOrStop();
 void setupSDCard();
 void printDirectory(File dir, int numTabs);
 int getTemperature(float& temp, float& humid);
@@ -46,7 +44,6 @@ void writeData(byte* bits);
 void processCommand();
 double rpmToHertz(float rpm);
 void setStepsPerRotation(int newStepsPerRotation);
-void processStepperOnOffSwitch();
 // end INCLUDES.h
 
 // temperature sensor stuff
@@ -80,18 +77,22 @@ const bool HEATER = true;
 const bool FAN = true;
 const bool SWITCH = true;
 }  // namespace Debug
+uint8_t HEATER_PWM_CHANNEL = 0;
 uint8_t STEPPER_PWM_CHANNEL = 2;
 uint8_t SPEAKER_CHANNEL = 4;
-uint8_t HEATER_PWM_CHANNEL = 6;
 uint8_t FAN_PWM_CHANNEL = 8;
 // WeMos D1 esp8266: D8 as standard
 const int chipSelect = SS;
-unsigned long startTime = millis();  // in ms
+uint8_t maxHeaterDutyCyclePercentage;       // TODO unused
+int currentStepsPerRotation;                // TODO unused
+unsigned long currentStartTime = millis();  // time since ESP power on in millis TODO unused
 // SD memory card
 const int32_t SPIfreq = 40000;
 const int UNIVERSAL_PWM_RESOLUTION = 10;
 const int UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 1);
 const int STEPPER_HALF_FUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
+//
+bool tempIsStepperOn = false;
 //
 int lastStepperOnOffButtonState = LOW;  // this is use for debouncing the previous steady state from the input pin
 int lastFlickerableState = -100;
@@ -174,6 +175,7 @@ class BackEnd {
         //     Serial.println("No fan pin defined!");
         // }
         // // setupSDCard();
+
         // // oneFullRotation();
         // Serial.println("maxHeaterDutyCycle");
         // Serial.println(Controller::getI("maxHeaterDutyCycle"));
@@ -185,7 +187,7 @@ class BackEnd {
         //     play(temp37);
         // }
         // delay(500);
-        // startStepper();
+        processStepperStartOrStop();
         // if (Controller::getPresent("TempSensorPin")) {
         //     getTemperature(temperature, humidity);
         //     startTemperature = temperature;
@@ -277,7 +279,12 @@ int calculateFrequency() {
     int freq = (int)(Controller::getI("Rpm") / 60 * currentStepsPerRotation);
     return freq;
 }
+
 void startStepper() {
+    if (tempIsStepperOn) {
+        Serial.println("!!!! stepper already on");
+        return;  // already on
+    }
     if (Controller::getI("MKSBoard")) {
         Serial.println("START MKS stepper gradually");
         setupI2SOShiftEnableMotor();
@@ -294,6 +301,8 @@ void startStepper() {
         delay(500);
         Controller::setBool("StepperOn", true);
     }
+    Controller::setBool("StepperOn", 1);
+    tempIsStepperOn = true;
 }
 //
 double rpmToHertz(float rpm) {
@@ -301,7 +310,12 @@ double rpmToHertz(float rpm) {
 }
 //
 void stopStepper() {
+    if (!tempIsStepperOn) {
+        Serial.println("!!!! stepper already off");
+        return;  // already on
+    }
     Serial.println("STOP STEPPER");
+    tempIsStepperOn = true;
     if (Controller::getI("MKSBoard")) {
         Serial.println("STOP MKS STEPPER");
         setupI2SOShiftDisableMotor();
@@ -309,7 +323,7 @@ void stopStepper() {
         Serial.println("STOP PCB STEPPER");
     }
     ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel to the GPIO Pin */
-    Controller::setBool("StepperOn", false);
+    tempIsStepperOn = false;
     delay(200);
 }
 
@@ -490,7 +504,7 @@ void writeFile(fs::FS& fs, const char* path, const String& message) {
 const int DebounceTime = 200;
 unsigned long lastDebounceTime = 0;
 /** return -1 if unchanged and 0 for off and 1 for on*/
-int readTurnOnStepper() {
+int readTurnOnStepperButton() {
     lastStepperOnOffButtonState = !digitalRead(Controller::getI("StepperEnablePin"));
     int ret = -1;  // means unchanged
     // check to see if you just pressed the button
@@ -534,7 +548,7 @@ void setLoudness(int loudness) {
 }
 //
 String getFormatedTimeSinceStart() {
-    unsigned long time = (unsigned long)((millis() - startTime) / 1000);  // finds the time since last print in secs
+    unsigned long time = (unsigned long)((millis() - currentStartTime) / 1000);  // finds the time since last print in secs
     return formatTime(time);
 }
 // we work in seconds and startTime is in miliseconds
@@ -542,7 +556,7 @@ String getDurationToAlarm() {
     if (desiredEndTime == -1) {
         return "No alarm set";
     }
-    unsigned long time = desiredEndTime * 60 - (unsigned long)((millis() - startTime) / 1000);
+    unsigned long time = desiredEndTime * 60 - (unsigned long)((millis() - currentStartTime) / 1000);
     return formatTime(time);
 }
 //
@@ -583,9 +597,9 @@ void fan(bool on) {
 void heater(bool on, int duty) {
     // this works only after setup was called to initialize the channel
     if (on) {
-        ledcWrite(Controller::getI("HEATER_PWM_CHANNEL"), duty);  // Heater start
+        ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
     } else {
-        ledcWrite(Controller::getI("HEATER_PWM_CHANNEL"), 0);  // Heater stop
+        ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
     }
     if (Debug::HEATER) {
         Serial.print("Heater set to: ");
@@ -649,8 +663,8 @@ void play(Melody melody, bool force) {
 }
 
 void desiredEndTimeCheck() {
-    if (desiredEndTime != -1 && desiredEndTime * 60 * 1000 <= (millis() - startTime)) {
-        Serial.println("Desired end time " + String(desiredEndTime) + " reached. Current elepsed time: " + getFormatedTimeSinceStart());
+    if (desiredEndTime != -1 && desiredEndTime * 60 * 1000 <= (millis() - currentStartTime)) {
+        Serial.println("Desired end time " + String(desiredEndTime) + " reached. Current elapsed time: " + getFormatedTimeSinceStart());
         play(scaleLouder, true);
     }
 }
@@ -664,9 +678,9 @@ void createDir(fs::FS& fs, const char* path) {
 }
 // need to Open Folder C:\a\diy\espProjects\OrbitalShakerAdrianBoard for the libraries
 
-void processStepperOnOffSwitch() {
-    if (Controller::getI("UseStepperOnOffSwitch") == true) {
-        int stepperOnOffPosition = readTurnOnStepper();  //-1 for unchanged
+void processStepperStartOrStop() {
+    if (Controller::getPresent("HasStepperOnOffSwitch")) {  // this should bypass the StepperEnablePin
+        int stepperOnOffPosition = readTurnOnStepperButton();     //-1 for unchanged
         if (stepperOnOffPosition != -1) {
             if (stepperOnOffPosition == 1) {
                 startStepper();
@@ -678,5 +692,11 @@ void processStepperOnOffSwitch() {
                 }
             }
         }
+    } else if (Controller::getI("StepperEnablePin") != 255 && Controller::getBool("StepperOn")) {  // soft enable is possible and we want on
+        startStepper();
+        fan(false);
+    } else {  // no enable disable capabilities either with the enable signal or with physical switch
+        startStepper();
+        fan(false);
     }
 }

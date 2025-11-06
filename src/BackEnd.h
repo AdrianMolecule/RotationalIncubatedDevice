@@ -18,10 +18,12 @@ class BackEnd {
     static inline unsigned long lastModelUpdateInSeconds = 0;
     static void setupBackend() {
         Serial.println("[SYS] BackEnd Setup complete.");
+        
     }
 
     static void loopBackend() {
         Serial.println("[SYS] loopBackend Started.");
+        ledcDetachPin(33); 
         unsigned long durationSinceRebootInSeconds = millis() / 1000;
         while (true) {
             // if Controller::model.

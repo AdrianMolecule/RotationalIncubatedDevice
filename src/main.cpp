@@ -223,7 +223,7 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
-    Controller::model.initializeSample();
+    Controller::model.initialize();
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });

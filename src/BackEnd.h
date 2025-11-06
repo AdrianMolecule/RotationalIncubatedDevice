@@ -110,33 +110,33 @@ class BackEnd {
 
     static void setupBackend() {
         Serial.println("================================= setupBackend Starting Now =============================");
-        // if (Controller::getI("MKSBoard")) {
-        //     Serial.println("Using MKS DLC32 v2.1 board specific setup");
-        //     pinMode(Controller::getI("StepperEnablePin"), INPUT);
-        //     // startStepper();
-        // } else {  // this is ALL needed for my custom PCB and it uses the mechanical switch
-        //     pinMode(Controller::getI("StepperEnablePin"), OUTPUT);
-        //     digitalWrite(Controller::getI("StepperEnablePin"), LOW);
-        //     pinMode(STEPPER_stepsPerRotation_M0, OUTPUT);
-        //     pinMode(STEPPER_stepsPerRotation_M1, OUTPUT);
-        //     pinMode(STEPPER_stepsPerRotation_M2, OUTPUT);
-        //     setStepsPerRotation(currentStepsPerRotation);
-        // }  // end just for the pcb
-        // //  Declare pins as output:
-        // pinMode(Controller::getI("LedPin"), OUTPUT);
-        // pinMode(Controller::getI("StepperPwmStepPin"), OUTPUT);
-        // pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
-        // pinMode(Controller::getI("I2SoClockPin"), OUTPUT);
-        // pinMode(Controller::getI("I2SoDataPin"), OUTPUT);
+        if (Controller::getI("MKSBoard")) {
+            Serial.println("Using MKS DLC32 v2.1 board specific setup");
+            pinMode(Controller::getI("StepperEnablePin"), INPUT);
+            // startStepper();
+        } else {  // this is ALL needed for my custom PCB and it uses the mechanical switch
+            pinMode(Controller::getI("StepperEnablePin"), OUTPUT);
+            digitalWrite(Controller::getI("StepperEnablePin"), LOW);
+            pinMode(STEPPER_stepsPerRotation_M0, OUTPUT);
+            pinMode(STEPPER_stepsPerRotation_M1, OUTPUT);
+            pinMode(STEPPER_stepsPerRotation_M2, OUTPUT);
+            setStepsPerRotation(currentStepsPerRotation);
+        }  // end just for the pcb
+        //  Declare pins as output:
+        pinMode(Controller::getI("LedPin"), OUTPUT);
+        pinMode(Controller::getI("StepperPwmStepPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoClockPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoDataPin"), OUTPUT);
         // pinMode(Controller::getI("FanPin"), OUTPUT);
         // // pinMode(Controller::getI("StepperEnablePin"), INPUT);
         // pinMode(Controller::getI("SpeakerPin"), OUTPUT);
         // // alternate(LedPin, 50, 5);
         // //   speaker
-        // ledcSetup(SPEAKER_CHANNEL, 5000, 8);
-        // ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
-        // ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
-        // play(validChoice);
+        ledcSetup(SPEAKER_CHANNEL, 5000, 8);
+        ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
+        ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
+        play(validChoice);
         // // temperature sensor
         // if (Controller::getPresent("TempSensorPin")) {
         //     if (!Controller::getI("UseOneWireForTemperature")) {
@@ -679,7 +679,7 @@ void createDir(fs::FS& fs, const char* path) {
 // need to Open Folder C:\a\diy\espProjects\OrbitalShakerAdrianBoard for the libraries
 
 void processStepperStartOrStop() {
-    if (Controller::getPresent("HasStepperOnOffSwitch")) {  // this should bypass the StepperEnablePin
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {   // this should bypass the StepperEnablePin
         int stepperOnOffPosition = readTurnOnStepperButton();     //-1 for unchanged
         if (stepperOnOffPosition != -1) {
             if (stepperOnOffPosition == 1) {

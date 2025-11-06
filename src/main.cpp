@@ -1,9 +1,11 @@
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
+
 #include <vector>
 
 #include "BackEnd.h"
@@ -15,7 +17,6 @@
 #include "Pass.h"
 
 AsyncWebServer server(80);  // needs to persist beyond the method
-
 
 String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>"; }
 
@@ -234,13 +235,13 @@ void setup() {
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
     server.addHandler(&Controller::webSocket);
     server.begin();
-    BackEnd::setupBackend();
-    xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
+    // BackEnd::setupBackend();
+    // xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
     Serial.println("[SYS] Setup complete.");
 }
-
+//
 bool first = true;
-void loop() {
+void serialLoop() {
     if (first) {
         Serial.println("Model m = Controller::model;");
         Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
@@ -348,4 +349,8 @@ void loop() {
             }
         }
     }
+}
+//
+void loop() {
+    serialLoop();
 }

@@ -12,7 +12,43 @@ class Controller {
     
     // ^ Declare the variable here (doesn't allocate memory yet)
 
-    // void incrementCounter() {
-    //     global_counter++;  // Access it directly within member functions
-    // }
+    static int getI(String name) {
+        Serial.println("Controller::getI called for the name "+name);
+        if(Controller::model.getByName(name)==nullptr){
+            Serial.println("Controller::getI did not find an entry for the name "+name);
+            return 255;
+        }
+        return model.getByName(name)->getValue().toInt();
+    }
+    static bool getPresent(String name) {
+        if(Controller::model.getByName(name)==nullptr){
+            Serial.println("Controller::getPresent did not find an entry for the name "+name);
+        }
+        return ! model.getByName(name)->getValue().compareTo(NOT_PRESENT);
+    }
+    static bool getBool(String name) {
+        if(Controller::model.getByName(name)==nullptr){
+            Serial.println("Controller::getBool did not find an entry for the name "+name);
+        }
+        return ! model.getByName(name)->getValue().compareTo("1");
+    }
+    static String getS(String name) {
+        if (Controller::model.getByName(name) == nullptr) {
+            Serial.println("Controller::getS did not find an entry for the name " + name);
+        }
+        return model.getByName(name)->getValue();
+    }
+    static void set(String name, String value) {
+        if (Controller::model.getByName(name) == nullptr) {
+            Serial.println("Controller::set did not find an entry for the name " + name);
+        }
+        model.getByName(name)->setValue(value);
+    }
+    static void setBool(String name, bool value) {
+        if (Controller::model.getByName(name) == nullptr) {
+            Serial.println("Controller::setBool did not find an entry for the name " + name);
+        }
+        model.getByName(name)->setValue(value?"1":"0");
+    }
+
 };

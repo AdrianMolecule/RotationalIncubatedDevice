@@ -84,7 +84,7 @@ uint8_t FAN_PWM_CHANNEL = 8;
 // WeMos D1 esp8266: D8 as standard
 const int chipSelect = SS;
 uint8_t maxHeaterDutyCyclePercentage;       // TODO unused
-int currentStepsPerRotation;                // TODO unused
+int currentStepsPerRotation = 200;          // TODO unused
 unsigned long currentStartTime = millis();  // time since ESP power on in millis TODO unused
 // SD memory card
 const int32_t SPIfreq = 40000;
@@ -92,35 +92,35 @@ const int UNIVERSAL_PWM_RESOLUTION = 10;
 const int UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 1);
 const int STEPPER_HALF_FUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
 //
-bool tempIsStepperOn = false;
+bool tempIsStepperOn = true;//need to be true because the first op is to stop it
 //
 int lastStepperOnOffButtonState = LOW;  // this is use for debouncing the previous steady state from the input pin
 int lastFlickerableState = -100;
 enum Preference {  // for preferences
     TimeDisplay = true,
     TemperatureDisplay = true,
-    MostMusic_OFF = false,  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
     TemperatureReached_MusicOn = true,
-
 };
 
 class BackEnd {
-   public:
+    public:
     static inline unsigned long lastModelUpdateInSeconds = 0;
-
+    
     static void setupBackend() {
         Serial.println("================================= setupBackend Starting Now =============================");
+        if (Controller::getPresent("StepperOnOffSwitchInputPin"))
+        pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
         if (Controller::getI("MKSBoard")) {
             Serial.println("Using MKS DLC32 v2.1 board specific setup");
-            pinMode(Controller::getI("StepperEnablePin"), INPUT);
-            // startStepper();
-        } else {  // this is ALL needed for my custom PCB and it uses the mechanical switch
-            pinMode(Controller::getI("StepperEnablePin"), OUTPUT);
-            digitalWrite(Controller::getI("StepperEnablePin"), LOW);
-            pinMode(STEPPER_stepsPerRotation_M0, OUTPUT);
-            pinMode(STEPPER_stepsPerRotation_M1, OUTPUT);
-            pinMode(STEPPER_stepsPerRotation_M2, OUTPUT);
-            setStepsPerRotation(currentStepsPerRotation);
+        } else {  // this is ALL needed for my custom PCB
+            if (Controller::getPresent("StepperOnOffSoftwareSwitchOutputPin")) {
+                pinMode(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), OUTPUT);
+                digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);
+            }
+            // pinMode(STEPPER_stepsPerRotation_M0, OUTPUT);
+            // pinMode(STEPPER_stepsPerRotation_M1, OUTPUT);
+            // pinMode(STEPPER_stepsPerRotation_M2, OUTPUT);
+            // setStepsPerRotation(currentStepsPerRotation);
         }  // end just for the pcb
         //  Declare pins as output:
         pinMode(Controller::getI("LedPin"), OUTPUT);
@@ -137,66 +137,72 @@ class BackEnd {
         ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
         ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
         play(validChoice);
-        // // temperature sensor
-        // if (Controller::getPresent("TempSensorPin")) {
-        //     if (!Controller::getI("UseOneWireForTemperature")) {
-        //         dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
-        //         if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
-        //             play(darthVader, true);
-        //             Serial.println("No DHT22 found or not working properly!");
-        //         }
-        //     } else {
-        //         tempSensor.begin();
-        //     }
-        //     Serial.println("Temp sensor initiated");
-        // } else {
-        //     Serial.println("No temperature sensor pin defined!");
-        // }
-        // // heater
-        // if (Controller::getPresent("HeaterPwmPin")) {
-        //     pinMode(Controller::getI("HeaterPwmPin"), OUTPUT);
-        //     // setup the heater
-        //     ledcSetup(HEATER_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
-        //     delay(20);
-        //     ledcAttachPin(Controller::getI("HeaterPwmPin"), HEATER_PWM_CHANNEL); /* Attach the StepPin PWM Channel to the GPIO Pin */
-        //     delay(20);
-        //     Serial.println("stepper desiredRPM:");
-        //     Serial.println(Controller::getI("Rpm"));
-        //     // motor
-        //     Serial.println("Initial disabling of the stepper in setup");
-        //     stopStepper();
-        //     play(scaleLouder);
-        // } else {
-        //     Serial.println("No heater pin defined!");
-        // }
-        // if (Controller::getPresent("FanPin")) {
-        //     fanSetup();
-        // } else {
-        //     Serial.println("No fan pin defined!");
-        // }
-        // // setupSDCard();
-
-        // // oneFullRotation();
-        // Serial.println("maxHeaterDutyCycle");
-        // Serial.println(Controller::getI("maxHeaterDutyCycle"));
-        // float temperature;
-        // float humidity;
-        // if (Controller::getI("desiredTemperature") == 30) {
-        //     play(temp30);
-        // } else if (Controller::getI("desiredTemperature") == 37) {
-        //     play(temp37);
-        // }
-        // delay(500);
+        // temperature sensor
+        if (Controller::getPresent("TempSensorPin")) {
+            if (!Controller::getI("UseOneWireForTemperature")) {
+                dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
+                if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
+                    play(darthVader, true);
+                    Serial.println("No DHT22 found or not working properly!");
+                }
+            } else {
+                tempSensor.begin();
+            }
+            Serial.println("Temp sensor initiated");
+        } else {
+            Serial.println("No temperature sensor pin defined!");
+        }
+        // heater
+        if (Controller::getPresent("HeaterPwmPin")) {
+            pinMode(Controller::getI("HeaterPwmPin"), OUTPUT);
+            // setup the heater
+            ledcSetup(HEATER_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
+            delay(20);
+            ledcAttachPin(Controller::getI("HeaterPwmPin"), HEATER_PWM_CHANNEL); /* Attach the StepPin PWM Channel to the GPIO Pin */
+            delay(20);
+            Serial.println("stepper desiredRPM:");
+            Serial.println(Controller::getI("Rpm"));
+            // motor
+            Serial.println("Initial disabling of the stepper in setup");
+            stopStepper();
+            play(scaleLouder);
+        } else {
+            Serial.println("No heater pin defined!");
+        }
+        if (Controller::getPresent("FanPin")) {
+            fanSetup();
+        } else {
+            Serial.println("No fan pin defined!");
+        }
+        // setupSDCard();
+        Serial.println("maxHeaterDutyCycle");
+        Serial.println(Controller::getI("maxHeaterDutyCycle"));
+        float temperature;
+        float humidity;
+        if (Controller::getI("desiredTemperature") == 30) {
+            play(temp30);
+        } else if (Controller::getI("desiredTemperature") == 37) {
+            play(temp37);
+        }
+        delay(300);
+        Serial.println("Attempt to start the stepper");
+        startStepper();
         processStepperStartOrStop();
-        // if (Controller::getPresent("TempSensorPin")) {
-        //     getTemperature(temperature, humidity);
-        //     startTemperature = temperature;
-        //     Serial.println("startTemperature:" + String(startTemperature) + " startHumidity:" + String(humidity));
-        // }
-        // Serial.println("=================================END Setup. Version:" + Controller::getS("version") + "================================");
+        if (Controller::getPresent("TempSensorPin")) {
+            getTemperature(temperature, humidity);
+            startTemperature = temperature;
+            Serial.println("startTemperature:" + String(startTemperature) + " startHumidity:" + String(humidity));
+        }
+        Serial.println("=================================END Setup. Version:" + Controller::getS("version") + "================================");
     }
+    //
+    static inline bool first = true;
     static void loopBackend() {
-        Serial.println("[SYS] loopBackend Started.");
+        if (first) {
+            Serial.println("[SYS] loopBackend Started.");
+            first = false;
+        }
+        Serial.println("[SYS] in loopBackend " + Controller::getS("desiredTemperature"));
         //     unsigned long durationSinceRebootInSeconds = millis() / 1000;
         //     while (true) {
         //         // if Controller::model.
@@ -281,6 +287,7 @@ int calculateFrequency() {
 }
 
 void startStepper() {
+    Serial.println("Attempt to start the stepper 3");
     if (tempIsStepperOn) {
         Serial.println("!!!! stepper already on");
         return;  // already on
@@ -505,7 +512,7 @@ const int DebounceTime = 200;
 unsigned long lastDebounceTime = 0;
 /** return -1 if unchanged and 0 for off and 1 for on*/
 int readTurnOnStepperButton() {
-    lastStepperOnOffButtonState = !digitalRead(Controller::getI("StepperEnablePin"));
+    lastStepperOnOffButtonState = !digitalRead(Controller::getI("StepperOnOffSwitchInputPin"));
     int ret = -1;  // means unchanged
     // check to see if you just pressed the button
     // (i.e. the input went from LOW to HIGH), and you've waited long enough
@@ -544,7 +551,7 @@ void setLoudness(int loudness) {
     // Loudness could be use with a mapping function, according to your buzzer or sound-producing hardware
     const int MinHardware_LOUDNESS = 0;
     const int MaxHardware_LOUDNESS = 16;
-    ledcWrite(Controller::getI("SPEAKER_CHANNEL"), map(loudness, -4, 4, MinHardware_LOUDNESS, MaxHardware_LOUDNESS));
+    ledcWrite(SPEAKER_CHANNEL, map(loudness, -4, 4, MinHardware_LOUDNESS, MaxHardware_LOUDNESS));
 }
 //
 String getFormatedTimeSinceStart() {
@@ -629,7 +636,7 @@ String formatTime(unsigned long time) {
 }
 //
 void play(Melody melody) {
-    if (Controller::getI("MostMusic_OFF")) {
+    if (Controller::getI("MostMusicOff")) {
         return;
     }
     melody.restart();         // The melody iterator is restarted at the beginning.
@@ -641,18 +648,18 @@ void play(Melody melody) {
         unsigned int loudness = melody.getLoudness();    // Get the loudness of the curent note (in a subjective relative scale from -3 to +3).
                                                          // Common interpretation will be -3 is really soft (ppp), and 3 really loud (fff).
         if (frequency > 0) {
-            ledcWriteTone(Controller::getI("SPEAKER_CHANNEL"), frequency);
+            ledcWriteTone(SPEAKER_CHANNEL, frequency);
             setLoudness(loudness);
         } else {
-            ledcWrite(Controller::getI("SPEAKER_CHANNEL"), 0);
+            ledcWrite(SPEAKER_CHANNEL, 0);
         }
         delay(duration);
         // This 1 ms delay with no tone is added to let a "breathing" time between each note.
         // Without it, identical consecutives notes will sound like just one long note.
-        ledcWrite(Controller::getI("SPEAKER_CHANNEL"), 0);
+        ledcWrite(SPEAKER_CHANNEL, 0);
         delay(1);
     }
-    ledcWrite(Controller::getI("SPEAKER_CHANNEL"), 0);
+    ledcWrite(SPEAKER_CHANNEL, 0);
     delay(1000);
 }
 
@@ -676,27 +683,26 @@ void createDir(fs::FS& fs, const char* path) {
         Serial.println("mkdir failed");
     }
 }
-// need to Open Folder C:\a\diy\espProjects\OrbitalShakerAdrianBoard for the libraries
-
+//
 void processStepperStartOrStop() {
-    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {   // this should bypass the StepperEnablePin
-        int stepperOnOffPosition = readTurnOnStepperButton();     //-1 for unchanged
-        if (stepperOnOffPosition != -1) {
-            if (stepperOnOffPosition == 1) {
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {              // it's an end with the motor on signal so both the physical and soft on for motor to run
+        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperButton();  //-1 for unchanged
+        if (stepperHardwareSwitchOnOffPosition != -1) {
+            if (stepperHardwareSwitchOnOffPosition == 1 && !tempIsStepperOn && Controller::getBool("StepperOn")) {
                 startStepper();
                 fan(false);
-            } else {
-                if (stepperOnOffPosition == 0) {
+            } else {  // hardware swich is off
+                if (stepperHardwareSwitchOnOffPosition == 0 && !tempIsStepperOn && !Controller::getBool("StepperOn")) {
                     stopStepper();
                     fan(true);
                 }
             }
         }
-    } else if (Controller::getI("StepperEnablePin") != 255 && Controller::getBool("StepperOn")) {  // soft enable is possible and we want on
+    } else if (!tempIsStepperOn && Controller::getBool("StepperOn")) {  // viceversa so something changed
         startStepper();
         fan(false);
-    } else {  // no enable disable capabilities either with the enable signal or with physical switch
-        startStepper();
+    } else if (tempIsStepperOn && !Controller::getBool("StepperOn")) {
+        stopStepper();
         fan(false);
     }
 }

@@ -194,6 +194,10 @@ void handleWebSocketMessage(String msg) {  // from the UI
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;    // Set your GMT offset in seconds (e.g., EST is -5 hours * 3600 seconds/hour = -18000)
 const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seconds (e.g., 1 hour = 3600 seconds)
+//
+void loopBackendTask(void* param);
+
+//
 void setup() {
     Serial.begin(115200);
     Serial.println("[SYS] Booting...");
@@ -235,9 +239,16 @@ void setup() {
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
     server.addHandler(&Controller::webSocket);
     server.begin();
-    // BackEnd::setupBackend();
-    // xTaskCreatePinnedToCore([](void*) { BackEnd::loopBackend(); }, "BackendTask", 4096, nullptr, 1, nullptr, 1);
+    BackEnd::setupBackend();
+    xTaskCreate(loopBackendTask, "LoopBackend", 8192, nullptr, 1, nullptr);
     Serial.println("[SYS] Setup complete.");
+}
+void loopBackendTask(void* param) {
+    for (;;) {
+        // Place the original code from loopBackend here
+        BackEnd::loopBackend();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
 }
 //
 bool first = true;

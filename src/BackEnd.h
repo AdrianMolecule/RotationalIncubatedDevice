@@ -49,26 +49,22 @@ void setStepsPerRotation(int newStepsPerRotation);
 // temperature sensor stuff
 const float ModerateHeat_POWER = 0.9;
 // Temperature either dh or oneWireDallas
-DHTesp dhTempSensor;                                 // used in setup and readTemperature
-OneWire oneWire(Controller::getI("TempSensorPin"));  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
-DallasTemperature tempSensor(&oneWire);
+// DHTesp dhTempSensor;  // used in setup and readTemperature
+// OneWire oneWire(Controller::getI("TempSensorPin"));  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
+// DallasTemperature tempSensor(&oneWire);
 //
 int lastTempHumidityReadTime = 0;  // never
 int lastAlertTime = 0;             // never
 int desiredEndTime = -1;           // in minutes
 float oldTemperature = 0.;
 float minHumidity = 60.;
-bool heaterWasOn = false;
 bool firstTimeTurnOnHeater = true;
 bool firstTimeReachDesiredTemperature = true;
 float maxTemperature = 0;
 // motor what we want for OS motor
 // https://github.com/nenovmy/arduino/blob/master/leds_disco/leds_disco.ino
 /* Setting all PWM motor, Heater PWM Properties */
-const int PWMResolution = 10;
-const int MaxDuty_CYCLE = (int)(pow(2, PWMResolution) - 1);
 // fan
-const int HalfDuty_CYCLE = MaxDuty_CYCLE / 2;
 const float fanDutyCyclePercentage = 1;
 const int FanFrequency = 40000;
 float startTemperature = 0;
@@ -90,9 +86,10 @@ unsigned long currentStartTime = millis();  // time since ESP power on in millis
 const int32_t SPIfreq = 40000;
 const int UNIVERSAL_PWM_RESOLUTION = 10;
 const int UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 1);
-const int STEPPER_HALF_FUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
+const float MODERATE_HEAT_POWER = 0.9;
+const int HALF_DUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
 //
-bool tempIsStepperOn = true;//need to be true because the first op is to stop it
+bool tempIsStepperOn = true;  // need to be true because the first op is to stop it
 //
 int lastStepperOnOffButtonState = LOW;  // this is use for debouncing the previous steady state from the input pin
 int lastFlickerableState = -100;
@@ -102,14 +99,21 @@ enum Preference {  // for preferences
     TemperatureReached_MusicOn = true,
 };
 
+DHTesp dhTempSensor;          // used in setup and readTemperature
+OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
+DallasTemperature tempSensor = DallasTemperature();
+
+/* OneWire oneWire = OneWire(Controller::getILogged("TempSensorPin"));
+DallasTemperature tempSensor(); */
 class BackEnd {
-    public:
+   public:
     static inline unsigned long lastModelUpdateInSeconds = 0;
-    
+
     static void setupBackend() {
-        Serial.println("================================= setupBackend Starting Now =============================");
+        Serial.println("setupBackend begin begins XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+        tempSensor.setOneWire(&oneWire);
         if (Controller::getPresent("StepperOnOffSwitchInputPin"))
-        pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
+            pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
         if (Controller::getI("MKSBoard")) {
             Serial.println("Using MKS DLC32 v2.1 board specific setup");
         } else {  // this is ALL needed for my custom PCB
@@ -146,6 +150,7 @@ class BackEnd {
                     Serial.println("No DHT22 found or not working properly!");
                 }
             } else {
+                oneWire.begin(Controller::getI("TempSensorPin"));
                 tempSensor.begin();
             }
             Serial.println("Temp sensor initiated");
@@ -165,6 +170,8 @@ class BackEnd {
             // motor
             Serial.println("Initial disabling of the stepper in setup");
             stopStepper();
+            Serial.println("Initial disabling of the heater in setup");
+            heater(false,-1);
             play(scaleLouder);
         } else {
             Serial.println("No heater pin defined!");
@@ -175,7 +182,6 @@ class BackEnd {
             Serial.println("No fan pin defined!");
         }
         // setupSDCard();
-        Serial.println("maxHeaterDutyCycle");
         Serial.println(Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
@@ -185,15 +191,13 @@ class BackEnd {
             play(temp37);
         }
         delay(300);
-        Serial.println("Attempt to start the stepper");
         startStepper();
-        processStepperStartOrStop();
         if (Controller::getPresent("TempSensorPin")) {
             getTemperature(temperature, humidity);
             startTemperature = temperature;
             Serial.println("startTemperature:" + String(startTemperature) + " startHumidity:" + String(humidity));
         }
-        Serial.println("=================================END Setup. Version:" + Controller::getS("version") + "================================");
+        Serial.println("=================================END Backend Setup. Version:" + Controller::getS("version") + "================================");
     }
     //
     static inline bool first = true;
@@ -202,41 +206,102 @@ class BackEnd {
             Serial.println("[SYS] loopBackend Started.");
             first = false;
         }
-        Serial.println("[SYS] in loopBackend " + Controller::getS("desiredTemperature"));
-        //     unsigned long durationSinceRebootInSeconds = millis() / 1000;
-        //     while (true) {
-        //         // if Controller::model.
-        //         durationSinceRebootInSeconds = millis() / 1000;
-        //         if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {
-        //             lastModelUpdateInSeconds = durationSinceRebootInSeconds;
-        //             Field* f = Controller::model.getByName("duration");
-        //             if (!f) {
-        //                 Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
-        //                 Controller::model.add(nf);
-        //             } else
-        //                 f->setValue(String(durationSinceRebootInSeconds));
-        //             Controller::model.saveToFile();
-        //             Controller::webSocket.textAll(Controller::model.toJsonString());
-        //         }
-        //         Field* f = Controller::model.getByName("delay");
-        //         String delayAsString;
-        //         if (!f) {
-        //             Field nf("11", "delay", "string", "7", "blocking delay in backend", false);
-        //             Controller::model.add(nf);
-        //             Controller::model.saveToFile();
-        //             Controller::webSocket.textAll(Controller::model.toJsonString());
-        //             delayAsString = nf.getValue();
-        //         } else {
-        //             delayAsString = f->getValue();
-        //         }
-        //         int delayAsInt = delayAsString.toInt() * 1000;
-        //         Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
-        //         Controller::webSocket.textAll(Controller::model.toJsonString());
-        //         delay(delayAsInt);
-        //     }
-        //     }
+        processStepperStartOrStop();
+        desiredEndTimeCheck();
+        // Get temperature
+        float temperature;
+        float humidity;
+        bool TEMPERATURE_DISPLAY = true;
+        bool TIME_DISPLAY = true;
+        float dT = Controller::getI("desiredTemperature");
+        if (((millis() - lastTempHumidityReadTime) / 1000) > 2) {  // every 2 seconds
+            getTemperature(temperature, humidity);
+            Controller::set("currentTemperature", String(temperature));
+            lastTempHumidityReadTime = millis();
+            if (temperature > maxTemperature) {
+                maxTemperature = temperature;
+            }
+            if (TEMPERATURE_DISPLAY) {
+                Serial.print("Current temp: " + String(temperature) + ", " + (!Controller::getBool("UseOneWireForTemperature") ? "Humidity:" + String(humidity) + " ," : ""));
+                Serial.print("DesiredTemperature: " + String(dT));
+                Serial.print(" max temperature: " + String(maxTemperature));
+                if (TIME_DISPLAY) {
+                    Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
+                } else {
+                    Serial.println(" ");
+                }
+            }
+            if (temperature < dT && !Controller::getBool("currentHeaterOn")) {
+                Serial.println("Turning heater ON");
+                if (firstTimeTurnOnHeater) {
+                    play(auClairDeLaLune);
+                    firstTimeTurnOnHeater = false;
+                }
+                digitalWrite(Controller::getI("LedPin"), HIGH);
+                if (dT - temperature >= 2) {
+                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE);  // Heater start
+                } else {
+                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                }
+                Controller::setBool("currentHeaterOn", true);
+            } else {      // no need to heat
+                if (Controller::getBool("currentHeaterOn")) { 
+                    Serial.println("Turning heater OFF");
+                    if (firstTimeReachDesiredTemperature) {
+                        if (Controller::getBool("TemperatureReachedMusicOn")) {
+                            play(frereJacquesFull, true);
+                        }
+                        firstTimeReachDesiredTemperature = false;
+                    } else {
+                        heater(false, 0);  // second arg is ignored when heater is turned off
+                        digitalWrite(Controller::getI("LedPin"), LOW);
+                        Controller::setBool("currentHeaterOn", false);
+                    }
+                }
+                // if (!USE_ONE_WIRE_FOR_TEMPERATURE && humidity < minHumidity && ((millis() - lastAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+                //     Serial.println("WARNING !!! humidity dropped less then minimal humidity");
+                //     lastAlertTime = millis();
+                //     if (DEBUG_LOW_HUMIDITY) {
+                //         play(invalidChoice);
+                //     }
+                // }
+            }
+        }
     }
 };
+// old loop
+//      unsigned long durationSinceRebootInSeconds = millis() / 1000;
+//      while (true) {
+//          // if Controller::model.
+//          durationSinceRebootInSeconds = millis() / 1000;
+//          if (durationSinceRebootInSeconds - lastModelUpdateInSeconds >= 5) {
+//              lastModelUpdateInSeconds = durationSinceRebootInSeconds;
+//              Field* f = Controller::model.getByName("duration");
+//              if (!f) {
+//                  Field nf("10", "duration", "string", String(durationSinceRebootInSeconds), "time since start", false);
+//                  Controller::model.add(nf);
+//              } else
+//                  f->setValue(String(durationSinceRebootInSeconds));
+//              Controller::model.saveToFile();
+//              Controller::webSocket.textAll(Controller::model.toJsonString());
+//          }
+//          Field* f = Controller::model.getByName("delay");
+//          String delayAsString;
+//          if (!f) {
+//              Field nf("11", "delay", "string", "7", "blocking delay in backend", false);
+//              Controller::model.add(nf);
+//              Controller::model.saveToFile();
+//              Controller::webSocket.textAll(Controller::model.toJsonString());
+//              delayAsString = nf.getValue();
+//          } else {
+//              delayAsString = f->getValue();
+//          }
+//          int delayAsInt = delayAsString.toInt() * 1000;
+//          Serial.println("[BACKEND] Blocking delay " + delayAsString + "s");
+//          Controller::webSocket.textAll(Controller::model.toJsonString());
+//          delay(delayAsInt);
+//      }
+//      }
 //
 // ?? not accurate but an idea. we move up  to
 // half of RPM in x2 stepsPerRotation and then full in no stepsPerRotation
@@ -287,7 +352,7 @@ int calculateFrequency() {
 }
 
 void startStepper() {
-    Serial.println("Attempt to start the stepper 3");
+    Serial.println("Attempt to start the stepper");
     if (tempIsStepperOn) {
         Serial.println("!!!! stepper already on");
         return;  // already on
@@ -304,7 +369,7 @@ void startStepper() {
         // delay(5);
         ledcAttachPin(Controller::getI("StepperPwmStepPin"), STEPPER_PWM_CHANNEL); /* Attach the StepPin PWM Channel to the GPIO Pin */
         // delay(5);
-        ledcWrite(STEPPER_PWM_CHANNEL, HalfDuty_CYCLE);
+        ledcWrite(STEPPER_PWM_CHANNEL, HALF_DUTY_CYCLE);
         delay(500);
         Controller::setBool("StepperOn", true);
     }
@@ -335,12 +400,13 @@ void stopStepper() {
 }
 
 int getTemperature(float& temp, float& humid) {
-    Serial.println("getTemperature called and pins..tempPin:" + String(Controller::getI("TempSensorPin")));
-    if (Controller::getI("UseOneWireForTemperature")) {
+    // Serial.println("getTemperature called and pins..tempPin:" + String(Controller::getI("TempSensorPin")));
+    if (Controller::getBool("UseOneWireForTemperature")) {
         tempSensor.requestTemperatures();
         // Serial.print("Temperature: ");  // print the temperature in Celsius
         temp = tempSensor.getTempCByIndex(0);
-        // Serial.println(temp);
+        Serial.print("In getTemperature temp read is:");
+        Serial.println(temp);
     } else {
         // Reading temperature for humidity takes about 250 milliseconds!
         // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
@@ -577,7 +643,7 @@ void fanSetup() {
     Serial.print(" at frequency ");
     Serial.print(FanFrequency);
     Serial.print(" at duty cycle ");
-    Serial.print(MaxDuty_CYCLE * fanDutyCyclePercentage);
+    Serial.print(UNIVERSAL_MAX_DUTY_CYCLE * fanDutyCyclePercentage);
     Serial.print(" or percentage ");
     Serial.println(fanDutyCyclePercentage);
     delay(3000);
@@ -590,7 +656,7 @@ void fan(bool on) {
     }
     if (on) {
         ledcAttachPin(Controller::getI("FanPin"), FAN_PWM_CHANNEL);
-        ledcWrite(Controller::getI("FAN_PWM_CHANNEL"), MaxDuty_CYCLE * fanDutyCyclePercentage);
+        ledcWrite(Controller::getI("FAN_PWM_CHANNEL"), UNIVERSAL_MAX_DUTY_CYCLE * fanDutyCyclePercentage);
     } else {
         ledcDetachPin(Controller::getI("FanPin"));
         ledcWrite(Controller::getI("FAN_PWM_CHANNEL"), 0);
@@ -613,7 +679,7 @@ void heater(bool on, int duty) {
         Serial.print(on);
         if (on) {
             Serial.print(" with duty at:");
-            Serial.print(((float)duty / MaxDuty_CYCLE));
+            Serial.print(((float)duty / UNIVERSAL_MAX_DUTY_CYCLE));
             Serial.print("%");
         }
         Serial.println();

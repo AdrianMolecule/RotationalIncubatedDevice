@@ -99,6 +99,12 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
     file.close();
     return true;
 }
+bool JsonWrapper::checkJson(const String& jsonStr) {
+    JsonDocument doc;
+    auto error = deserializeJson(doc, jsonStr);
+    if (error) return false;
+    return true;
+}
 
 bool JsonWrapper::loadFieldsFromFile(std::vector<Field>& fields) {
     if (!SPIFFS.begin(true)) return false;

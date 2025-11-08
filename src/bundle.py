@@ -1,4 +1,4 @@
-#write pyhon code that produces a file called allTheCode.txt by going in the current  directory and for each .cpp and .h file puts the file name in # the allTheCode.txt and then on the next lines the content of the file
+    #write pyhon code that produces a file called allTheCode.txt by going in the current  directory and for each .cpp and .h file puts the file name in # the allTheCode.txt and then on the next lines the content of the file
 import os
 import datetime
 

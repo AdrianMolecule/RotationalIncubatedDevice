@@ -154,9 +154,42 @@ String generateMetadataPage() {
     return html;
 }
 
-String generateDebugPage() { return generateMenu() + "<h1>Debug</h1><pre>" + Controller::model.toJsonString() + "</pre>"; }
+String generateDebugPage() {
+    String html = generateMenu();
+    html += "<h1>Debug</h1>";
+    html += "<h3>Current Model</h3><pre id='model-json'>" + Controller::model.toJsonString() + "</pre>";
+    html += "<h3>Upload New Model JSON</h3>";
+    html += "<textarea id='jsonInput' rows='10' cols='80' placeholder='Paste new model JSON here'></textarea><br>";
+    html += "<button onclick='uploadModel()'>Upload Model</button>";
+    html += "<h3>Factory Reset</h3>";
+    html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults</button>";
+    html += R"rawliteral(
+        <script>
+        var ws = new WebSocket('ws://' + location.hostname + '/ws');
+        ws.onmessage = function(evt){
+            try{
+                var data = JSON.parse(evt.data);
+                document.getElementById('model-json').innerText = JSON.stringify(data, null, 2);
+            }catch(e){console.error(e);}
+        };
+        function uploadModel(){
+            var json = document.getElementById('jsonInput').value.trim();
+            if(!json){alert('Please paste JSON first');return;}
+            try{JSON.parse(json);}catch(e){alert('Invalid JSON: '+e);return;}
+            ws.send(JSON.stringify({action:'uploadModel', json:json}));
+            document.getElementById('jsonInput').value = '';
+        }
+        function factoryReset(){
+            if(confirm('Restore factory model? This will overwrite all current fields.')){
+                ws.send(JSON.stringify({action:'factoryReset'}));
+            }
+        }            
+        </script>
+    )rawliteral";
+    return html;
+}
 
-void handleWebSocketMessage(String msg) {  // from the UI
+void handleWebSocketMessage(String msg) {  // from the UI to board
     JsonDocument doc;
     if (deserializeJson(doc, msg)) return;
     String action = doc["action"] | "";
@@ -185,6 +218,21 @@ void handleWebSocketMessage(String msg) {  // from the UI
         Field f;
         f.fromJson(fld);
         Controller::model.add(f);
+        Controller::model.saveToFile();
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "uploadModel") {
+        String jsonStr = doc["json"] | "";
+        if (JsonWrapper::checkJson(jsonStr)) {
+            Controller::model.loadFromJson(jsonStr);
+            Controller::model.saveToFile();
+            Serial.println("[WEB] Uploaded new model via Debug page");
+        } else {
+            Serial.println("[WEB] Invalid JSON upload ignored");
+        }
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "factoryReset") {
+        Serial.println("[WEB] Factory reset requested from Debug page");
+        Controller::model.initialize();
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
     }
@@ -227,6 +275,7 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
+    //Controller::model.load();
     Controller::model.initialize();
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
@@ -269,9 +318,9 @@ void serialLoop() {
         } else if (line.startsWith("upload ")) {
             String jsonStr = line.substring(line.indexOf(' ') + 1);
             jsonStr.trim();
-            if (JsonWrapper::jsonToFields(jsonStr, Controller::model.getFields())) {
-                JsonWrapper::saveModelToFile(Controller::model.getFields());
-                Serial.println("New replaced Json:" + String(Controller::model.toJsonString()));
+            if (JsonWrapper::checkJson(jsonStr)) {
+                Controller::model.loadFromJson(jsonStr);
+                Serial.println("New replaced Json:" + String(Controller::model.toJsonString()));  // todo remove
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }
@@ -331,10 +380,14 @@ void serialLoop() {
                 Controller::model.saveToFile();
                 Controller::webSocket.textAll(Controller::model.toJsonString());
             }
-        } else if (line.startsWith("r")) {
+        } else if (line == "r") {
             Controller::model.initialize();
             Serial.printf("[SERIAL] Reinitialized the whole Controller::model");
-        } else if (line.startsWith("?")) {
+        } else if (line.startsWith("reset")) {
+            Serial.println("[SERIAL] Resetting ESP32...");
+            delay(200);
+            ESP.restart();
+        } else if (line=="?") {
             Serial.println("\n--- Available Serial Commands ---");
             Serial.println("? or help          : Display this help message");
             Serial.println("m                  : List current Controller::model fields details");
@@ -344,6 +397,7 @@ void serialLoop() {
             Serial.println("delete <name>      : Delete a field by name");
             Serial.println("<name>=<value>     : Update the value of an existing field");
             Serial.println("r                  : reset reinitialize fields with factory setting");
+            Serial.println("reset              : Restart the ESP32");
             Serial.println("-----------------------------------\n");
         } else {
             int eq = line.indexOf('=');

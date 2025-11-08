@@ -12,13 +12,14 @@ class Helper {
         // desired or set values AT this point for Tube rotator
         fields.emplace_back(String(idCounter++), "desiredTemperature", "float", "37", "desired Temperature");
         fields.emplace_back(String(idCounter++), "currentTemperature", "float", "-1", "current Temperature", true);
-        fields.emplace_back(String(idCounter++), "Rpm", "float", "80", "current and desired RPM");
-        fields.emplace_back(String(idCounter++), "currentHeatingEndDurationInMinutes", "int", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
+        fields.emplace_back(String(idCounter++), "currentHeaterOn", "bool", "0", "shows current heater state controlled by the device but overridden by HeaterDisabled ", true);
+        fields.emplace_back(String(idCounter++), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.");
+        fields.emplace_back(String(idCounter++), "currentHeatingEndDurationInMinutes", "int", NOT_PRESENT, "desiredEndTime. Set an end time alarm in minutes like 60 for 1 hour from start or -1 for no alarm. You can separately reset the start time to now.");
         fields.emplace_back(String(idCounter++), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400");
         //on offs
         fields.emplace_back(String(idCounter++), "StepperOn", "bool", "0", "turns on off stepper");  //"1"
         fields.emplace_back(String(idCounter++), "FanOn", "bool", "1", "turns on off fan if capability exists");
-        fields.emplace_back(String(idCounter++), "HeaterOn", "bool", "1", "turns on off heater");
+        fields.emplace_back(String(idCounter++), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp");
         // pins
         fields.emplace_back(String(idCounter++), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
         fields.emplace_back(String(idCounter++), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin");//32 is internally connected to spindle*/,
@@ -33,12 +34,14 @@ class Helper {
         fields.emplace_back(String(idCounter++), "LedPin", "uint8_t", String(2), "LedPin");
         fields.emplace_back(String(idCounter++), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
         fields.emplace_back(String(idCounter++), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
+        //
         fields.emplace_back(String(idCounter++), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle");
         fields.emplace_back(String(idCounter++), "MKSBoard", "bool", "1", "MKSBoard");
-        fields.emplace_back(String(idCounter++), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "set to the pin to read the on off physical button if it's present like for the incubated OS");  // 36 Input /*Sensor_VP SVP -*/,
-        fields.emplace_back(String(idCounter++), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "StepperOnOffSoftwareSwitchOutputPin on my board we can control the on off by enable in output mode");//maybe 26
+        fields.emplace_back(String(idCounter++), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "set to the pin to read the on-off-physical button if present ");  // 36 Input /*Sensor_VP SVP -*/,
+        fields.emplace_back(String(idCounter++), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode");//maybe 26
         //
-        fields.emplace_back(String(idCounter++), "MostMusicOff", "bool", "1", "MKSBoard");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(String(idCounter++), "MostMusicOff", "bool", "0", "MostMusicOff");                            // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(String(idCounter++), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         //
         fields.emplace_back(String(idCounter++), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         // Preferences
@@ -46,7 +49,7 @@ class Helper {
         // fields.emplace_back(String(idCounter++), "preference_TemperatureDisplay", "bool", "1", "preference_TemperatureDisplay");
         // fields.emplace_back(String(idCounter++), "preference_TemperatureReached_MusicOn", "bool", "1", "preference_TemperatureReached_MusicOn");
         //
-        fields.emplace_back(String(idCounter++), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only when we sue DH not UseOneWireForTemperature");
+        fields.emplace_back(String(idCounter++), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
         // Debug Flags        
         fields.emplace_back(String(idCounter++), "DEBUG_HEATER", "bool", "1", "DEBUG_HEATER");
         fields.emplace_back(String(idCounter++), "DEBUG_FAN", "bool", "1", "DEBUG_FAN");

@@ -53,7 +53,7 @@ class Model {
     }
 
     void initialize() {
-        Serial.println("[MODEL] Initialize model by loading factory model");
+        Serial.println("[MODEL] Initialize model by loading factory hardcoded model");
         Helper::initialize(fields);
     }
 
@@ -62,6 +62,9 @@ class Model {
         Helper::initializeSample(fields);
     }
 
+    bool loadFromJson(const String& json) {
+        return JsonWrapper::jsonToFields(json, fields);
+    }
     bool load() {
         JsonWrapper::loadFieldsFromFile(fields);
         if (fields.empty()) {

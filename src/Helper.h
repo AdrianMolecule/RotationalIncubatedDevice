@@ -50,10 +50,7 @@ class Helper {
         // fields.emplace_back(String(idCounter++), "preference_TemperatureReached_MusicOn", "bool", "1", "preference_TemperatureReached_MusicOn");
         //
         fields.emplace_back(String(idCounter++), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
-        // Debug Flags        
-        fields.emplace_back(String(idCounter++), "DEBUG_HEATER", "bool", "1", "DEBUG_HEATER");
-        fields.emplace_back(String(idCounter++), "DEBUG_FAN", "bool", "1", "DEBUG_FAN");
-        fields.emplace_back(String(idCounter++), "DEBUG_SWITCH", "bool", "1", "DEBUG_SWITCH");
+        //
         fields.emplace_back(String(idCounter++), "version", "string", "1.1", "Version", true);
 
     }

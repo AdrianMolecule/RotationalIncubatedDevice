@@ -54,7 +54,7 @@ const float ModerateHeat_POWER = 0.9;
 // DallasTemperature tempSensor(&oneWire);
 //
 int lastTempHumidityReadTime = 0;  // never
-int lastAlertTime = 0;             // never
+unsigned long lastAlertTime = 0;   // never
 int desiredEndTime = -1;           // in minutes
 float oldTemperature = 0.;
 float minHumidity = 60.;
@@ -171,7 +171,7 @@ class BackEnd {
             Serial.println("Initial disabling of the stepper in setup");
             stopStepper();
             Serial.println("Initial disabling of the heater in setup");
-            heater(false,-1);
+            heater(false, -1);
             play(scaleLouder);
         } else {
             Serial.println("No heater pin defined!");
@@ -179,7 +179,7 @@ class BackEnd {
         if (Controller::getPresent("FanPin")) {
             fanSetup();
         } else {
-            Serial.println("No fan pin defined!");
+            Serial.println("No fan for this device");
         }
         // setupSDCard();
         Serial.println(Controller::getI("maxHeaterDutyCycle"));
@@ -231,44 +231,46 @@ class BackEnd {
                     Serial.println(" ");
                 }
             }
-            if (temperature < dT && !Controller::getBool("currentHeaterOn")) {
-                Serial.println("Turning heater ON");
-                if (firstTimeTurnOnHeater) {
-                    play(auClairDeLaLune);
-                    firstTimeTurnOnHeater = false;
+            if (temperature < dT) {
+                if (!Controller::getBool("currentHeaterOn")) {
+                    Serial.println("Turning heater ON");
+                    if (firstTimeTurnOnHeater) {
+                        play(auClairDeLaLune);
+                        firstTimeTurnOnHeater = false;
+                    }
+                    if (dT - temperature >= 2) {
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE);  // Heater start
+                    } else {
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                    }
+                    Controller::setBool("currentHeaterOn", true);
                 }
-                digitalWrite(Controller::getI("LedPin"), HIGH);
-                if (dT - temperature >= 2) {
-                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE);  // Heater start
-                } else {
-                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
-                }
-                Controller::setBool("currentHeaterOn", true);
-            } else {      // no need to heat
-                if (Controller::getBool("currentHeaterOn")) { 
+            } else {  // no need to heat
+                if (Controller::getBool("currentHeaterOn")) {
                     Serial.println("Turning heater OFF");
                     if (firstTimeReachDesiredTemperature) {
                         if (Controller::getBool("TemperatureReachedMusicOn")) {
                             play(frereJacquesFull, true);
                         }
                         firstTimeReachDesiredTemperature = false;
-                    } else {
-                        heater(false, 0);  // second arg is ignored when heater is turned off
-                        digitalWrite(Controller::getI("LedPin"), LOW);
-                        Controller::setBool("currentHeaterOn", false);
                     }
+                    heater(false, 0);  // second arg is ignored when heater is turned off
+                    Controller::setBool("currentHeaterOn", false);
                 }
-                // if (!USE_ONE_WIRE_FOR_TEMPERATURE && humidity < minHumidity && ((millis() - lastAlertTime) / 1000) > 200 /* about 3 minutes*/) {
-                //     Serial.println("WARNING !!! humidity dropped less then minimal humidity");
-                //     lastAlertTime = millis();
-                //     if (DEBUG_LOW_HUMIDITY) {
-                //         play(invalidChoice);
-                //     }
-                // }
+            }
+            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+                Serial.println("WARNING !!! humidity dropped to less then minimal humidity");
+                unsigned long nowTime = millis();
+                if (nowTime > lastAlertTime + 2000) {
+                    lastAlertTime = nowTime;
+                    play(invalidChoice);
+                }
             }
         }
     }
-};
+}
+
+;
 // old loop
 //      unsigned long durationSinceRebootInSeconds = millis() / 1000;
 //      while (true) {
@@ -302,49 +304,6 @@ class BackEnd {
 //          delay(delayAsInt);
 //      }
 //      }
-//
-// ?? not accurate but an idea. we move up  to
-// half of RPM in x2 stepsPerRotation and then full in no stepsPerRotation
-void setStepsPerRotation(int newStepsPerRotation) {
-    Serial.println("set currentStepsPerRotation to:");
-    Serial.println(newStepsPerRotation);
-    switch (newStepsPerRotation) {
-        case STEPS200:
-            digitalWrite(STEPPER_stepsPerRotation_M0, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M1, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M2, LOW);
-            break;
-        case STEPS400:
-            digitalWrite(STEPPER_stepsPerRotation_M0, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M1, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M2, LOW);
-            break;
-        case STEPS800:
-            digitalWrite(STEPPER_stepsPerRotation_M0, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M1, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M2, LOW);
-            break;
-        case STEPS1600:
-            digitalWrite(STEPPER_stepsPerRotation_M0, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M1, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M2, LOW);
-            break;
-        case STEPS3200:
-            digitalWrite(STEPPER_stepsPerRotation_M0, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M1, LOW);
-            digitalWrite(STEPPER_stepsPerRotation_M2, HIGH);
-            break;
-        case STEPS6400:
-            digitalWrite(STEPPER_stepsPerRotation_M0, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M1, HIGH);
-            digitalWrite(STEPPER_stepsPerRotation_M2, HIGH);
-            break;
-        default:
-            Serial.println("BAD micro-stepping. Only 200,400,800,1600,3200,6400 allowed");
-            return;
-            currentStepsPerRotation = newStepsPerRotation;
-    }
-}
 //
 int calculateFrequency() {
     int freq = (int)(Controller::getI("Rpm") / 60 * currentStepsPerRotation);
@@ -671,15 +630,17 @@ void heater(bool on, int duty) {
     // this works only after setup was called to initialize the channel
     if (on) {
         ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
+        digitalWrite(Controller::getI("LedPin"), HIGH);
     } else {
         ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
+        digitalWrite(Controller::getI("LedPin"), LOW);
     }
     if (Debug::HEATER) {
         Serial.print("Heater set to: ");
         Serial.print(on);
         if (on) {
             Serial.print(" with duty at:");
-            Serial.print(((float)duty / UNIVERSAL_MAX_DUTY_CYCLE));
+            Serial.print(((float)duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100);
             Serial.print("%");
         }
         Serial.println();

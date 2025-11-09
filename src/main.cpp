@@ -290,7 +290,7 @@ void setup() {
     server.begin();
     BackEnd::setupBackend();
     xTaskCreate(loopBackendTask, "LoopBackend", 8192, nullptr, 1, nullptr);
-    Serial.println("[SYS] Setup complete.");
+    Serial.println("[SYS] Main Setup complete.");
 }
 void loopBackendTask(void* param) {
     for (;;) {

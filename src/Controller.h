@@ -9,57 +9,66 @@ class Controller {
     inline static Model model = Model{};
 
     inline static AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};  // Declare the variable here (doesn't allocate memory yet)
-    static int getILogged(String name) {
-        Serial.println("Controller::getI called for the name LOGGED LOGGED LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL " + name);
-        if (Controller::model.getByName(name) == nullptr) {
-            Serial.println("!!!!!Controller::getI did not find an entry for the name[" + name + "]");
-            return -1;
-        }
-        return model.getByName(name)->getValue().toInt();
-    }
+
     static int getI(String name) {
-        //Serial.println("Controller::getI called for the name "+name);
-        if(Controller::model.getByName(name)==nullptr){
-            Serial.println("!!!!!Controller::getI did not find an entry for the name[" + name + "]");
+        // Serial.println("Controller::getI called for the name "+name);
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!Controller::getI did not find an entry for the name[" + name + "]");            
             return -1;
         }
-        return model.getByName(name)->getValue().toInt();
+        return f->getValue().toInt();
     }
     static bool getPresent(String name) {
-        if(Controller::model.getByName(name)==nullptr){
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
             Serial.println("Controller::getPresent called for the name " + name);
-            Serial.println("!!!!!Controller::getPresent did not find an entry for the name[" + name + "]");
+            Controller::error("!!!!!Controller::getPresent did not find an entry for the name[" + name + "]");
             return false;
         }
-        //Serial.println("!!!!!Controller::getPresent found value:" + model.getByName(name)->getValue());
-        return !(model.getByName(name)->getValue()==NOT_PRESENT);
+        // Serial.println("!!!!!Controller::getPresent found value:" + model.getByName(name)->getValue());
+        else
+            return !(f->getValue() == NOT_PRESENT);
     }
     static bool getBool(String name) {
-        //Serial.println("Controller::getBool called for the name " + name);
-        if(Controller::model.getByName(name)==nullptr){
-            Serial.println("!!!!!!!!!!!!!!!!!!Controller::getBool did not find an entry for the name[" + name+"]");
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!!!!!!!!!!!!!!Controller::getBool did not find an entry for the name[" + name + "]");
             return false;
-        }
-        return ! model.getByName(name)->getValue().compareTo("1");
+        } else
+            return f->getValue().compareTo("0");
     }
     static String getS(String name) {
-        if (Controller::model.getByName(name) == nullptr) {
-            Serial.println("!!!!!Controller::getS did not find an entry for the name[" + name + "]");
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!Controller::getS did not find an entry for the name[" + name + "]");
             return "NOT FOUND";
-        }
-        return model.getByName(name)->getValue();
+        } else
+            return f->getValue();
     }
     static void set(String name, String value) {
-        if (Controller::model.getByName(name) == nullptr) {
-            Serial.println("!!!!!Controller::set did not find an entry for the name[" + name + "]");
-        }
-        model.getByName(name)->setValue(value);
+        Serial.println("Controller::setI called for the name "+name+" with value:"+value);
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!Controller::set did not find an entry for the name[" + name + "]");
+        } else
+            f->setValue(value);
+    }
+    static void setNoLog(String name, String value) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!Controller::set did not find an entry for the name[" + name + "]");
+        } else
+            f->setValueQuiet(value);
     }
     static void setBool(String name, bool value) {
-        if (Controller::model.getByName(name) == nullptr) {
-            Serial.println("!!!!!Controller::setBool did not find an entry for the name[" + name + "]");
-        }
-        model.getByName(name)->setValue(value?"1":"0");
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::error("!!!!!Controller::setBool did not find an entry for the name[" + name + "]");
+        } else
+            f->setValue(value ? "1" : "0");
     }
-
+    static void error(String msg) {
+        Controller::set("status", Controller::getS("status")+":"+msg);
+    }
 };

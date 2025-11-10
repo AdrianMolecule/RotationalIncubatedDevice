@@ -1,8 +1,9 @@
 #include "JsonWrapper.h"
+
 #include <SPIFFS.h>
 
 const char* FILE_LOCATION = "/model.json";
-String JsonWrapper::toJsonString(const std::vector<Field>& fields) {
+String JsonWrapper::toJsonString(const std::vector<Field>& fields){
     JsonDocument doc;  // sufficient size for fields
     JsonArray arr = doc.to<JsonArray>();
     for (const auto& f : fields) {
@@ -13,12 +14,14 @@ String JsonWrapper::toJsonString(const std::vector<Field>& fields) {
         obj["value"] = f.getValue();
         obj["description"] = f.getDescription();
         obj["readOnly"] = f.getReadOnly();
+        obj["isShown"] = f.getIsShown();
+        obj["isPersisted"] = f.getIsPersisted();
     }
     String result;
     serializeJson(doc, result);
     return result;
 }
-
+//
 String JsonWrapper::fieldToJsonString(const Field& f) {
     JsonDocument doc;
     JsonObject obj = doc.to<JsonObject>();
@@ -28,6 +31,8 @@ String JsonWrapper::fieldToJsonString(const Field& f) {
     obj["value"] = f.getValue();
     obj["description"] = f.getDescription();
     obj["readOnly"] = f.getReadOnly();
+    obj["isShown"] = f.getIsShown();
+    obj["isPersisted"] = f.getIsPersisted();
     String result;
     serializeJson(doc, result);
     return result;
@@ -44,6 +49,8 @@ bool JsonWrapper::jsonToField(const String& jsonStr, Field& f) {
     f.setValue(obj["value"] | "");
     f.setDescription(obj["description"] | "");
     f.setReadOnly(obj["readOnly"] | false);
+    f.setIsShown(obj["isShown"] | false);
+    f.setIsPersisted(obj["isPersisted"] | true);
 
     return true;
 }
@@ -62,6 +69,8 @@ bool JsonWrapper::jsonToFields(const String& jsonStr, std::vector<Field>& fields
         f.setValue(obj["value"] | "");
         f.setDescription(obj["description"] | "");
         f.setReadOnly(obj["readOnly"] | false);
+        f.setIsShown(obj["isShown"] | false);
+        f.setIsPersisted(obj["isPersisted"] | true);
         fields.push_back(f);
     }
     return true;
@@ -89,9 +98,10 @@ String JsonWrapper::updateFieldJson(const Field& f) {
 }
 
 bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
+    Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>Saving Model to Flash >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
     File file = SPIFFS.open(FILE_LOCATION, FILE_WRITE);
     if (!file) {
-        Serial.println("Error when trying to open the saveto file. Maybe the location of:" + String(FILE_LOCATION)+ " is not correct or possible");
+        Serial.println("Error when trying to open the save-to file. Maybe the location of:" + String(FILE_LOCATION) + " is not correct or possible");
         return false;
     }
     String s = toJsonString(fields);

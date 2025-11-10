@@ -18,18 +18,26 @@
 
 AsyncWebServer server(80);  // needs to persist beyond the method
 
-String generateMenu() { return "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/metadata'>Metadata</a> | <a href='/debug'>Debug</a> | <a href='/reboot'>Reboot</a></p>"; }
+String generateMenu() {
+    return "<p>"
+           "<a href='/'>Index</a> | "
+           "<a href='/info'>Info</a> | "
+           "<a href='/metadata'>Metadata</a> | "
+           "<a href='/advanced'>Advanced</a> | "
+           "<a href='/chart'>Chart</a> | "
+           "</p>";
+}
 
-String generateIndexPage(bool brief) {
+String generateIndexPage(bool brief) {  // from device to display
     String html = generateMenu();
+    std::vector<Field> fi = Controller::model.getScreenFields(brief);
     if (brief) {
-        html += "<h1>Index Page</h1>";
+        html += "<h1>Status Page</h1>";
     } else {
-        html += "<h1>Info Page</h1>";
+        html += "<h1>Extended Page</h1>";
     }
     html += "<table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
-    for (auto& f : Controller::model.getFields()) {
-        if (!brief && f.getReadOnly()) continue;
+    for (auto& f : fi) {
         html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
         if (f.getReadOnly())
             html += "<td><input value='" + f.getValue() + "' disabled></td>";
@@ -39,25 +47,30 @@ String generateIndexPage(bool brief) {
     }
     html += R"(<script>
         var ws = new WebSocket('ws://' + location.hostname + '/ws');
-        ws.onmessage = function(evt) {
-        try {
-            var data = JSON.parse(evt.data);
-            if (!Array.isArray(data)) return;
-            var inputs = document.querySelectorAll("input[data-id]");
-            // reload if number of fields changed (add or delete)
-            if (inputs.length != data.length) {
-                location.reload();
-                return;
-            }
-            // update only values for existing fields
-            data.forEach(f => {
-                var el = document.querySelector("input[data-id='" + f.id + "']");
-                if (el) el.value = f.value;
-            });
-        } catch(e) {
-            console.error("WS update error:", e);
-        }
-    };
+                    ws.onmessage = function(evt) {
+                try {
+                    var data = JSON.parse(evt.data);
+                    if (!Array.isArray(data)) return;
+                    var inputs = document.querySelectorAll("input[data-id]");
+                    // reload if number of fields changed (add or delete)
+                   data.forEach(f => {
+                        var el = document.querySelector("input[data-id='" + f.id + "']");
+                        if (el && document.activeElement !== el) {
+                            if (el.value !== f.value) {
+                                el.value = f.value;                                
+                                el.style.transition = "background-color 0.8s";// highlight change
+                                el.style.backgroundColor = "#fff3a0"; // light yellow
+                                setTimeout(() => {
+                                    el.style.backgroundColor = "";
+                                }, 800);
+                            }
+                        }
+                    });
+                } catch(e) {
+                    console.error("WS update error:", e);
+                }
+            };
+    
     function onChange(el){
         var val = el.value;
         var id = el.getAttribute('data-id');
@@ -69,8 +82,8 @@ String generateIndexPage(bool brief) {
 String generateMetadataPage() {
     String html;
     html += "<h1>Metadata</h1>";
-    html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/debug'>Debug</a></p>";
-    html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
+    html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/advanced'>Advanced</a></p>";
+    html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
         html += "<td>" + f.getId() + "</td>";
@@ -79,6 +92,8 @@ String generateMetadataPage() {
         html += "<td>" + f.getValue() + "</td>";
         html += "<td>" + f.getDescription() + "</td>";
         html += "<td>" + String(f.getReadOnly()) + "</td>";
+        html += "<td>" + String(f.getIsShown()) + "</td>";
+        html += "<td>" + String(f.getIsPersisted()) + "</td>";
         html += "<td><button onclick='reorder(\"" + f.getId() + "\",true)'>&#9650;</button><button onclick='reorder(\"" + f.getId() + "\",false)'>&#9660;</button></td>";
         html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td>";
         html += "</tr>";
@@ -91,6 +106,8 @@ String generateMetadataPage() {
     html += "Value: <input id='fvalue'><br>";
     html += "Description: <input id='fdesc'><br>";
     html += "ReadOnly: <input id='freadonly' type='checkbox'><br>";
+    html += "IsShown: <input id='isshown' type='checkbox'><br>";
+    html += "IsPersisted: <input id='ispersisted' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
     html += R"rawliteral(
                             <script>
@@ -111,6 +128,8 @@ String generateMetadataPage() {
             "<td>"+f.value+"</td>"+
             "<td>"+f.description+"</td>"+
             "<td>"+f.readOnly+"</td>"+
+            "<td>"+f.isShown+"</td>"+
+            "<td>"+f.isPersisted+"</td>"+            
             "<td><button onclick='reorder(\""+f.id+"\",true)'>&#9650;</button>"+
             "<button onclick='reorder(\""+f.id+"\",false)'>&#9660;</button></td>"+
             "<td><button onclick='delField(\""+f.id+"\")'>Delete</button></td>";
@@ -147,6 +166,8 @@ String generateMetadataPage() {
         document.getElementById('fvalue').value="";
         document.getElementById('fdesc').value="";
         document.getElementById('freadonly').checked=false;
+        document.getElementById('isshown').checked=false;
+        document.getElementById('ispersisted').checked=true;
         }
         </script>
         )rawliteral";
@@ -154,15 +175,23 @@ String generateMetadataPage() {
     return html;
 }
 
-String generateDebugPage() {
+String generateAdvancedPage() {
     String html = generateMenu();
-    html += "<h1>Debug</h1>";
-    html += "<h3>Current Model</h3><pre id='model-json'>" + Controller::model.toJsonString() + "</pre>";
+    html += "<h1>Advanced</h1>";
+    html += "<h3>Device Management</h3>";
+    html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button>";
     html += "<h3>Upload New Model JSON</h3>";
     html += "<textarea id='jsonInput' rows='10' cols='80' placeholder='Paste new model JSON here'></textarea><br>";
     html += "<button onclick='uploadModel()'>Upload Model</button>";
     html += "<h3>Factory Reset</h3>";
     html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults</button>";
+    html += "<h3>Factory Defaults Preview</h3>";
+    html += "<button onclick='showFactoryModel()'>Show Current Model</button> ";
+    html += "<button onclick='showFactoryJson()'>Show Factory Default Model</button>";
+
+    // ✅ Re-enable the display area for JSON output:
+    html += "<h3>Model Output</h3><pre id='model-json' style='background:#eee;padding:10px;border:1px solid #ccc;max-height:400px;overflow:auto;'></pre>";
+
     html += R"rawliteral(
         <script>
         var ws = new WebSocket('ws://' + location.hostname + '/ws');
@@ -170,8 +199,13 @@ String generateDebugPage() {
             try{
                 var data = JSON.parse(evt.data);
                 document.getElementById('model-json').innerText = JSON.stringify(data, null, 2);
-            }catch(e){console.error(e);}
+            }catch(e){
+                console.error(e);
+                // If parsing fails, just show the raw message
+                document.getElementById('model-json').innerText = evt.data;
+            }
         };
+
         function uploadModel(){
             var json = document.getElementById('jsonInput').value.trim();
             if(!json){alert('Please paste JSON first');return;}
@@ -179,13 +213,126 @@ String generateDebugPage() {
             ws.send(JSON.stringify({action:'uploadModel', json:json}));
             document.getElementById('jsonInput').value = '';
         }
+
         function factoryReset(){
             if(confirm('Restore factory model? This will overwrite all current fields.')){
                 ws.send(JSON.stringify({action:'factoryReset'}));
             }
-        }            
+        }   
+
+        function showFactoryModel(){
+            ws.send(JSON.stringify({action:'showFactoryModel'}));
+        }
+
+        function showFactoryJson(){
+            ws.send(JSON.stringify({action:'showFactoryJson'}));
+        }  
+        function reboot(){
+            if(confirm('Reboot the ESP32 now?')){
+                fetch('/reboot');
+            }
+        }                   
         </script>
     )rawliteral";
+    return html;
+}
+
+String generateChartPage() {
+    String html = generateMenu();
+    html += "<h1>Live Temperature Chart</h1>";
+    html += "<canvas id='tempChart' width='800' height='400' style='border:1px solid #ccc;'></canvas>";
+    html += R"rawliteral(
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const chartData = {
+            labels: [],
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: [],
+                fill: false,
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1
+            }]
+        };
+        const config = {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: false,
+                animation: false,
+                scales: {
+                    x: { title: { display: true, text: 'Time (s)' } },
+                    y: { title: { display: true, text: 'Temperature' } }
+                }
+            }
+        };
+        const tempChart = new Chart(ctx, config);
+
+        let startTime = Date.now();
+        let lastUpdate = 0;
+
+        // 🔸 Load previous chart state from localStorage
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('tempChartData');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    chartData.labels = parsed.labels || [];
+                    chartData.datasets[0].data = parsed.data || [];
+                    tempChart.update();
+                    console.log("[Chart] Restored from localStorage (" + chartData.labels.length + " pts)");
+                } catch(e) {
+                    console.warn("[Chart] Failed to restore chart data:", e);
+                }
+            }
+        });
+
+        const ws = new WebSocket('ws://' + location.hostname + '/ws');
+        ws.onmessage = function(evt) {
+            const now = Date.now();
+            if (now - lastUpdate < 2000) return; // only update every 2 sec
+            lastUpdate = now;
+
+            try {
+                const data = JSON.parse(evt.data);
+                if (!Array.isArray(data)) return;
+                const tempField = data.find(f => f.name === 'currentTemperature');
+                if (!tempField) return;
+                const temp = parseFloat(tempField.value);
+                if (isNaN(temp)) return;
+                const t = ((Date.now() - startTime) / 1000).toFixed(1);
+
+                chartData.labels.push(t);
+                chartData.datasets[0].data.push(temp);
+
+                // keep last 15 hours (54000 points @ 1s)
+                if (chartData.labels.length > 54000) {
+                    chartData.labels.shift();
+                    chartData.datasets[0].data.shift();
+                }
+
+                tempChart.update();
+
+                // 🔸 Save chart data every few updates to localStorage
+                if (chartData.labels.length % 10 === 0) {
+                    localStorage.setItem('tempChartData', JSON.stringify({
+                        labels: chartData.labels,
+                        data: chartData.datasets[0].data
+                    }));
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        // 🔸 Clear storage button (optional)
+        function clearChartStorage(){
+            localStorage.removeItem('tempChartData');
+            alert('Saved chart data cleared.');
+        }
+        </script>
+        <button onclick="clearChartStorage()" style="margin-top:10px;">Clear Saved Data</button>
+        )rawliteral";
+
     return html;
 }
 
@@ -199,7 +346,10 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         Field* f = Controller::model.getById(id);
         if (f && !f->getReadOnly()) {
             f->setValue(val);
-            Controller::model.saveToFile();
+            Serial.println("[SYS] From UI set value for:" + f->getName() + " value:" + f->getValue());
+            if (f->getIsPersisted()) {
+                Controller::model.saveToFile();
+            }
             Controller::webSocket.textAll(Controller::model.toJsonString());
         }
     } else if (action == "delete") {
@@ -225,16 +375,27 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         if (JsonWrapper::checkJson(jsonStr)) {
             Controller::model.loadFromJson(jsonStr);
             Controller::model.saveToFile();
-            Serial.println("[WEB] Uploaded new model via Debug page");
+            Serial.println("[WEB] Uploaded new model via Advanced page");
         } else {
             Serial.println("[WEB] Invalid JSON upload ignored");
         }
         Controller::webSocket.textAll(Controller::model.toJsonString());
     } else if (action == "factoryReset") {
-        Serial.println("[WEB] Factory reset requested from Debug page");
+        Serial.println("[WEB] Factory reset requested from Advanced page");
         Controller::model.initialize();
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "showFactoryModel") {
+        Serial.println("[WEB] Showing factory default model (object view)");
+        Model temp;
+        temp.initialize();  // create default fields
+        Controller::webSocket.textAll(temp.toJsonString());
+    } else if (action == "showFactoryJson") {
+        Serial.println("[WEB] Showing factory default model (raw JSON view)");
+        Model temp;
+        temp.initialize();
+        String json = temp.toJsonString();
+        Controller::webSocket.textAll(json);
     }
 }
 
@@ -275,17 +436,25 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
-    //Controller::model.load();
-    Controller::model.initialize();
+    Controller::model.load();
+    // Controller::model.initialize();
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
     server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
-    server.on("/debug", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateDebugPage()); });
+    server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateAdvancedPage()); });
+    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateChartPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
 
-    Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {if(type==WS_EVT_DATA){String msg;for(size_t i=0;i<len;i++)msg+=(char)data[i];handleWebSocketMessage(msg);} });
+    Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
+        if (type == WS_EVT_DATA) {
+            String msg;
+            for (size_t i = 0; i < len; i++)
+                msg += (char)data[i];
+            handleWebSocketMessage(msg);
+        }
+    });
     server.addHandler(&Controller::webSocket);
     server.begin();
     BackEnd::setupBackend();
@@ -303,7 +472,7 @@ void loopBackendTask(void* param) {
 bool first = true;
 void serialLoop() {
     if (first) {
-        Serial.println("Model m = Controller::model;");
+        Serial.println("serial loop started");
         Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
         first = false;
     }
@@ -365,6 +534,14 @@ void serialLoop() {
             if (idx >= 0) {
                 f.setReadOnly((line.substring(idx + 9, idx + 10) == "1"));
             }
+            idx = line.indexOf("isshown=");
+            if (idx >= 0) {
+                f.setIsShown((line.substring(idx + 9, idx + 10) == "1"));
+            }
+            idx = line.indexOf("ispersisted=");
+            if (idx >= 0) {
+                f.setIsPersisted((line.substring(idx + 9, idx + 10) == "1"));
+            }
             if (f.getName() != "") {
                 Controller::model.add(f);
                 Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
@@ -387,7 +564,7 @@ void serialLoop() {
             Serial.println("[SERIAL] Resetting ESP32...");
             delay(200);
             ESP.restart();
-        } else if (line=="?") {
+        } else if (line == "?") {
             Serial.println("\n--- Available Serial Commands ---");
             Serial.println("? or help          : Display this help message");
             Serial.println("m                  : List current Controller::model fields details");

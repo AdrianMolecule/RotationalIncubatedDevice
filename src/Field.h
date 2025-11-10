@@ -7,15 +7,16 @@ class Field {
     String name;
     String type;
     String value;
-    bool readOnly;
     String description;
+    bool readOnly;
     bool isShown;
+    bool isPersisted;
 
    public:
     Field() = default;
     Field(const String& id, const String& name, const String& type = "string",
           const String& value = "0", const String& description = "default description",
-          bool readOnly = false, bool isShown = true) {
+          bool readOnly = false, bool isShown = false, bool isPersisted = true) {
         this->id = id;
         this->name = name;
         this->type = type;
@@ -23,16 +24,18 @@ class Field {
         this->description = description;
         this->readOnly = readOnly;
         this->isShown = isShown;
+        this->isPersisted = isPersisted;
     }
 
-    void Field::fromJson(const JsonObject& obj) {
+    void fromJson(const JsonObject& obj) {
         id = obj["id"] | "";
         name = obj["name"] | "";
         type = obj["type"] | "";
         value = obj["value"] | "";
         description = obj["description"] | "";
         readOnly = obj["readOnly"] | false;
-        readOnly = obj["isShown"] | false;
+        isShown = obj["isShown"] | false;
+        isPersisted = obj["isPersisted"] | true;
     }
 
     void toJson(JsonObject& obj) const {
@@ -43,6 +46,7 @@ class Field {
         obj["description"] = description;
         obj["readOnly"] = readOnly;
         obj["isShown"] = isShown;
+        obj["isPersisted"] = isPersisted;
     }
 
     const String getId() const { return id; }
@@ -52,6 +56,7 @@ class Field {
     bool getReadOnly() const { return readOnly; }
     const String getDescription() const { return description; }
     bool getIsShown() const { return isShown; }
+    bool getIsPersisted() const { return isPersisted; }
 
     void setId(const String& val) {
         Serial.printf("[Field] setId: %s -> %s\n", id.c_str(), val.c_str());
@@ -71,17 +76,23 @@ class Field {
         Serial.printf("[Field] %s setValue: %s -> %s\n", name.c_str(), value.c_str(), val.c_str());
         value = val;
     }
+    void setValueQuiet(const String& val) {
+        value = val;
+    }
     void setDescription(const String& val) {
-        Serial.printf("[Field] setDescription: %s -> %s\n", description.c_str(), val.c_str());
+        Serial.printf("[Field] %s setDescription: %s -> %s\n", name.c_str(), description.c_str(), val.c_str());
         description = val;
     }
     void setReadOnly(bool val) {
-        Serial.printf("[Field] setReadOnly: %d -> %d\n", readOnly, val);
+        Serial.printf("[Field] %s setReadOnly: %d -> %d\n", name.c_str(), readOnly, val);
         readOnly = val;
     }
-
     void setIsShown(bool val) {
         Serial.printf("[Field] %s setIsShown: %d -> %d\n", name.c_str(), isShown, val);
         isShown = val;
+    }
+    void setIsPersisted(bool val) {
+        Serial.printf("[Field] %s setIsPersisted: %d -> %d\n", name.c_str(), isPersisted, val);
+        isPersisted = val;
     }
 };

@@ -7,9 +7,20 @@ class Model {
    private:
     std::vector<Field> fields;
 
-   public:
+    public:
     std::vector<Field>& getFields() {
         return fields;
+    }
+    
+    std::vector<Field> getScreenFields(bool brief) {
+        if(!brief) return fields;
+        std::vector<Field> shownFields;
+        for (const Field& field : fields) {
+            if (field.getIsShown()) {
+                shownFields.push_back(field);
+            }
+        }
+        return shownFields;
     }
 
     Field* getById(const String& id) {
@@ -86,6 +97,7 @@ class Model {
     String toJsonString() {
         return JsonWrapper::toJsonString(fields);
     }
+
     String toBriefJsonString() {
         String result = "Brief for Fields size:" + String(fields.size());
         if (fields.size() >= 2) {

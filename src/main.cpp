@@ -272,7 +272,7 @@ String generateChartPage() {
         let startTime = Date.now();
         let lastUpdate = 0;
 
-        // 🔸 Load previous chart state from localStorage
+        //Load previous chart state from localStorage
         window.addEventListener('load', () => {
             const saved = localStorage.getItem('tempChartData');
             if (saved) {
@@ -419,25 +419,33 @@ void setup() {
         timeout++;
     }
     Serial.println();
+    String wifiStatus;
+    String when;
+    String dns;
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        wifiStatus = "[WiFi] Connected! IP: " + WiFi.localIP().toString();
+        Serial.println(wifiStatus);
         // Initialize and get the time from NTP server
         configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
-        Serial.println(" at:" + Helper::getTime());
-        if (MDNS.begin("bio"))
-            Serial.println("[mDNS] Registered as bio.local");
-        else
-            Serial.println("[mDNS] Failed to start mDNS");
-    } else
-        Serial.println("[WiFi] Connection failed!");
+        when = " at:" + Helper::getTime();
+        Serial.println(when);
+        if (MDNS.begin("bio")) {
+            dns = "[mDNS] Registered as bio.local";
+        } else {
+            dns = "[mDNS] Failed to start mDNS";
+        }
+        Serial.println(dns);
+    } else {
+        wifiStatus = "[WiFi] Connection failed!";
+    }
     if (!SPIFFS.begin(false))
-        Serial.println("[FS] Mount failed!");
+        Controller::status("[FS] Mount failed!");
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
     Controller::model.load();
     // Controller::model.initialize();
+    Controller::status(wifiStatus + ", " + when + ", " + dns + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
@@ -560,8 +568,8 @@ void serialLoop() {
         } else if (line == "r") {
             Controller::model.initialize();
             Serial.printf("[SERIAL] Reinitialized the whole Controller::model");
-        } else if (line.startsWith("reset")) {
-            Serial.println("[SERIAL] Resetting ESP32...");
+        } else if (line.startsWith("restart")) {
+            Serial.println("[SERIAL] restart ESP32...");
             delay(200);
             ESP.restart();
         } else if (line == "?") {
@@ -574,7 +582,7 @@ void serialLoop() {
             Serial.println("delete <name>      : Delete a field by name");
             Serial.println("<name>=<value>     : Update the value of an existing field");
             Serial.println("r                  : reset reinitialize fields with factory setting");
-            Serial.println("reset              : Restart the ESP32");
+            Serial.println("restart            : Restart the ESP32");
             Serial.println("-----------------------------------\n");
         } else {
             int eq = line.indexOf('=');

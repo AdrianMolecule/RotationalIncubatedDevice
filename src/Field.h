@@ -3,7 +3,7 @@
 
 class Field {
    private:
-    String id;
+    String id;//todo change to int or some smaller type
     String name;
     String type;
     String value;
@@ -66,7 +66,6 @@ class Field {
         Serial.printf("[Field] setName: %s -> %s\n", name.c_str(), val.c_str());
         name = val;
     }
-
     void setType(const String& val) {
         Serial.printf("[Field] setType: %s -> %s\n", type.c_str(), val.c_str());
         type = val;

@@ -29,7 +29,7 @@ const String generateMenu() {
 }
 
 //rebuilds the whole table and overwrites user input if not fast also puts the wait for data message
-String generateStatusPage(bool brief) {  // from device to display
+String generateStatusPage(bool brief) {
     String html = generateMenu();
     std::vector<Field> fi;
     if (brief) {
@@ -39,6 +39,7 @@ String generateStatusPage(bool brief) {  // from device to display
         html += "<h1>Extended Page</h1>";
         fi = Controller::model.getFields();
     }
+
     html += R"rawliteral(
     <style>
     table { border-collapse: collapse; width: 100%; margin-top: 10px; }
@@ -51,54 +52,57 @@ String generateStatusPage(bool brief) {  // from device to display
             <tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>
         </thead>
         <tbody id="data-body">
-            <tr><td colspan="4" style="text-align:center;color:#777;">Waiting for data...</td></tr>
+    )rawliteral";
+
+    // Initial table rows
+    for (auto& f : fi) {
+        html += "<tr>";
+        html += "<td>" + f.getName() + "</td>";
+        html += "<td>" + f.getType() + "</td>";
+        html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "'";
+        if (f.getReadOnly()) html += " disabled";
+        html += "></td>";
+        html += "<td>" + f.getDescription() + "</td>";
+        html += "</tr>";
+    }
+
+    html += R"rawliteral(
         </tbody>
     </table>
     <script>
     const ws = new WebSocket('ws://' + location.hostname + '/ws');
-    ws.onmessage = function(evt){
-        try{
-            const data = JSON.parse(evt.data);
-            if(!Array.isArray(data)) return;
 
-            const tbody = document.getElementById("data-body");
-            if (!tbody) return;
-
-            // Build new table rows dynamically
-            let tbodyHtml = "";
-            data.forEach(f => {
-                const disabled = f.readOnly ? "disabled" : "";
-                tbodyHtml += `
-                    <tr>
-                        <td>${f.name}</td>
-                        <td>${f.type}</td>
-                        <td><input data-id="${f.id}" value="${f.value}" ${disabled}></td>
-                        <td>${f.description}</td>
-                    </tr>`;
-            });
-
-            tbody.innerHTML = tbodyHtml;
-
-            // Reattach onchange listeners
-            tbody.querySelectorAll("input[data-id]").forEach(el => {
+    // Attach onchange listeners to inputs
+    function attachInputListeners() {
+        document.querySelectorAll("input[data-id]").forEach(el => {
+            if (!el.dataset.listenerAttached) {
                 el.addEventListener("change", () => {
-                    const id = el.getAttribute("data-id");
-                    const val = el.value;
-                    ws.send(JSON.stringify({ action: "update", id: id, value: val }));
+                    ws.send(JSON.stringify({ action: "update", id: el.getAttribute("data-id"), value: el.value }));
                 });
-            });
+                el.dataset.listenerAttached = "true";
+            }
+        });
+    }
+    attachInputListeners();
 
-            // Highlight changed values (optional)
+    ws.onmessage = function(evt) {
+        try {
+            const data = JSON.parse(evt.data);
+            if (!Array.isArray(data)) return;
+
+            // Update only existing input values (preserve user edits)
             data.forEach(f => {
                 const el = document.querySelector("input[data-id='" + f.id + "']");
-                if (el && document.activeElement !== el && el.value !== f.value) {
-                    el.value = f.value;
-                    el.style.transition = "background-color 0.8s";
-                    el.style.backgroundColor = "#fff3a0";
-                    setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                if (el && document.activeElement !== el) {
+                    if (el.value !== f.value) {
+                        el.value = f.value;
+                        el.style.transition = "background-color 0.8s";
+                        el.style.backgroundColor = "#fff3a0";
+                        setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                    }
                 }
             });
-        }catch(e){
+        } catch(e) {
             console.error("WS update error:", e);
         }
     };

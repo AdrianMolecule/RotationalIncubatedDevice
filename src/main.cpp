@@ -18,7 +18,7 @@
 
 AsyncWebServer server(80);  // needs to persist beyond the method
 
-String generateMenu() {
+const String generateMenu() {
     return "<p>"
            "<a href='/'>Status</a> | "
            "<a href='/info'>Info</a> | "
@@ -28,46 +28,88 @@ String generateMenu() {
            "</p>";
 }
 
+//rebuilds the whole table and overwrites user input if not fast also puts the wait for data message
 String generateStatusPage(bool brief) {  // from device to display
     String html = generateMenu();
-    std::vector<Field> fi = Controller::model.getScreenFields(brief);
+    std::vector<Field> fi;
     if (brief) {
         html += "<h1>Status Page</h1>";
+        fi = Controller::model.getScreenFields();
     } else {
         html += "<h1>Extended Page</h1>";
-    }
-    html +="<table border=1>"
-        "<thead><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr></thead>"
-        "<tbody id='data-body'></tbody></table>";
-    for (auto& f : fi) {
-        html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
-        if (f.getReadOnly())
-            html += "<td><input value='" + f.getValue() + "' disabled></td>";
-        else
-            html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "' onchange='onChange(this)'></td>";
-        html += "<td>" + f.getDescription() + "</td></tr>";
+        fi = Controller::model.getFields();
     }
     html += R"rawliteral(
-<style>
-table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-th, td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
-thead { background-color: #f0f0f0; }
-tbody td input { width: 100%; box-sizing: border-box; }
-</style>
-<table>
-<thead>
-<tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>
-</thead>
-<tbody id="data-body">
-<tr><td colspan="4" style="text-align:center;color:#777;">Waiting for data...</td></tr>
-</tbody>
-</table>
-)rawliteral";
+    <style>
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+    thead { background-color: #f0f0f0; }
+    tbody td input { width: 100%; box-sizing: border-box; }
+    </style>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>
+        </thead>
+        <tbody id="data-body">
+            <tr><td colspan="4" style="text-align:center;color:#777;">Waiting for data...</td></tr>
+        </tbody>
+    </table>
+    <script>
+    const ws = new WebSocket('ws://' + location.hostname + '/ws');
+    ws.onmessage = function(evt){
+        try{
+            const data = JSON.parse(evt.data);
+            if(!Array.isArray(data)) return;
+
+            const tbody = document.getElementById("data-body");
+            if (!tbody) return;
+
+            // Build new table rows dynamically
+            let tbodyHtml = "";
+            data.forEach(f => {
+                const disabled = f.readOnly ? "disabled" : "";
+                tbodyHtml += `
+                    <tr>
+                        <td>${f.name}</td>
+                        <td>${f.type}</td>
+                        <td><input data-id="${f.id}" value="${f.value}" ${disabled}></td>
+                        <td>${f.description}</td>
+                    </tr>`;
+            });
+
+            tbody.innerHTML = tbodyHtml;
+
+            // Reattach onchange listeners
+            tbody.querySelectorAll("input[data-id]").forEach(el => {
+                el.addEventListener("change", () => {
+                    const id = el.getAttribute("data-id");
+                    const val = el.value;
+                    ws.send(JSON.stringify({ action: "update", id: id, value: val }));
+                });
+            });
+
+            // Highlight changed values (optional)
+            data.forEach(f => {
+                const el = document.querySelector("input[data-id='" + f.id + "']");
+                if (el && document.activeElement !== el && el.value !== f.value) {
+                    el.value = f.value;
+                    el.style.transition = "background-color 0.8s";
+                    el.style.backgroundColor = "#fff3a0";
+                    setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                }
+            });
+        }catch(e){
+            console.error("WS update error:", e);
+        }
+    };
+    </script>
+    )rawliteral";
 
     return html;
 }
+
 String generateMetadataPage() {
-    String html;
+    String html = generateMenu();
     html += "<h1>Metadata</h1>";
     html += "<p><a href='/'>Status</a> | <a href='/info'>Info</a> | <a href='/advanced'>Advanced</a></p>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
@@ -484,7 +526,7 @@ void serialLoop() {
             jsonStr.trim();
             if (JsonWrapper::checkJson(jsonStr)) {
                 Controller::model.loadFromJson(jsonStr);
-                Serial.println("Json replaced but not persisted !!!!!!!!!!!"); 
+                Serial.println("Json replaced but not persisted !!!!!!!!!!!");
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }

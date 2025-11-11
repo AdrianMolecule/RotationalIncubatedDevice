@@ -21,22 +21,22 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400",false,true);
         fields.emplace_back(getNextIdStr(), "heartBeat", "string", "-", "Should change all every time a new temp is read",true,true,false);//readonly isSHown, is not persisted
         // on offs read from UI and set on the board. They might be overridden by physical switches
-        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper",false,true,false);  //"1"
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper",false,true,false); 
         fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists",false,true);
-        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp",false,true);
+        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp", false, true);
         // pins
-        fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin", false);  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
-        fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin", false);  // 32 is internally connected to spindle*/,
-        fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", "22", "StepperPwmStepPin", false);
+        fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
+        fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin");  // 32 is internally connected to spindle*/,
+        fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", "22", "StepperPwmStepPin");
         // misc
-        fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin", false);
-        fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin", false);
-        fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin", false);
-        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "25", "SpeakerPin", false);  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing the GPIO 25 signal and the other providing a GND (ground) connection.
-        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin", false);
-        fields.emplace_back(getNextIdStr(), "LedPin", "uint8_t", "2", "LedPin", false);
-        fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin", false);
-        fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin", false);
+        fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin");
+        fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin");
+        fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin");
+        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "25", "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing the GPIO 25 signal and the other providing a GND (ground) connection.
+        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");
+        fields.emplace_back(getNextIdStr(), "LedPin", "uint8_t", "2", "LedPin");
+        fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
+        fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
         //
         fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle", false, true);
         fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "1", "MKSBoard", false, true);

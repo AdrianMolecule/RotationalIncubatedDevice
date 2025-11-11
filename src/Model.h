@@ -12,8 +12,7 @@ class Model {
         return fields;
     }
     
-    std::vector<Field> getScreenFields(bool brief) {
-        if(!brief) return fields;
+    std::vector<Field> getScreenFields() {
         std::vector<Field> shownFields;
         for (const Field& field : fields) {
             if (field.getIsShown()) {

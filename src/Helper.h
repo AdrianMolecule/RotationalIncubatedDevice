@@ -17,11 +17,11 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true,true,false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true,true,false);
         fields.emplace_back(getNextIdStr(), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.",false,true);
-        fields.emplace_back(getNextIdStr(), "desiredHeatingEndDurationInMinutes", "int", NOT_PRESENT, "desiredEndTime. Set an end time alarm in minutes like 60 for 1 hour from start or -1 for no alarm. You can separately reset the start time to now.",false,true);
+        fields.emplace_back(getNextIdStr(), "desiredHeatingEndDurationInMinutes", "int", "2", "desiredEndTime. Set an end time alarm in minutes like 60 for 1 hour from start or -1 for no alarm. You can separately reset the start time to now.",false,true);
         fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400",false,true);
         fields.emplace_back(getNextIdStr(), "heartBeat", "string", "-", "Should change all every time a new temp is read",true,true,false);//readonly isSHown, is not persisted
         // on offs read from UI and set on the board. They might be overridden by physical switches
-        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "0", "turns on off stepper",false,true,false);  //"1"
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper",false,true,false);  //"1"
         fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists",false,true);
         fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp",false,true);
         // pins
@@ -47,11 +47,8 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         //
         fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
-        // Preferences
-        // fields.emplace_back(getNextIdStr(), "preference_TimeDisplay", "bool", "1", "preference_TimeDisplay");
-        // fields.emplace_back(getNextIdStr(), "preference_TemperatureDisplay", "bool", "1", "preference_TemperatureDisplay");
-        // fields.emplace_back(getNextIdStr(), "preference_TemperatureReached_MusicOn", "bool", "1", "preference_TemperatureReached_MusicOn");
-        //
+
+        fields.emplace_back(getNextIdStr(), "timeToAlarmInSec", "int", "-1", "time to alarm", true, true,false);
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..",false,true);
         //
         fields.emplace_back(getNextIdStr(), "version", "string", "1.1", "Version", true, true);
@@ -127,7 +124,7 @@ class Helper {
 // fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature");
 // fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true);
 // fields.emplace_back(getNextIdStr(), "Rpm", "float ", "300", "current and desired RPM");
-// fields.emplace_back(getNextIdStr(), "currentHeatingEndDurationInMinutes", "unsigned long ", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
+// fields.emplace_back(getNextIdStr(), "currentHeatingEndDurationInMinutes", "int ", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
 // // on offs
 // fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "36   ", "turns on off stepper");  //"1"
 // fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists");

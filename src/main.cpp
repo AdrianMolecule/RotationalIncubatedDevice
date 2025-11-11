@@ -20,7 +20,7 @@ AsyncWebServer server(80);  // needs to persist beyond the method
 
 String generateMenu() {
     return "<p>"
-           "<a href='/'>Index</a> | "
+           "<a href='/'>Status</a> | "
            "<a href='/info'>Info</a> | "
            "<a href='/metadata'>Metadata</a> | "
            "<a href='/advanced'>Advanced</a> | "
@@ -28,7 +28,7 @@ String generateMenu() {
            "</p>";
 }
 
-String generateIndexPage(bool brief) {  // from device to display
+String generateStatusPage(bool brief) {  // from device to display
     String html = generateMenu();
     std::vector<Field> fi = Controller::model.getScreenFields(brief);
     if (brief) {
@@ -36,7 +36,9 @@ String generateIndexPage(bool brief) {  // from device to display
     } else {
         html += "<h1>Extended Page</h1>";
     }
-    html += "<table border=1><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>";
+    html +="<table border=1>"
+        "<thead><tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr></thead>"
+        "<tbody id='data-body'></tbody></table>";
     for (auto& f : fi) {
         html += "<tr><td>" + f.getName() + "</td><td>" + f.getType() + "</td>";
         if (f.getReadOnly())
@@ -45,44 +47,29 @@ String generateIndexPage(bool brief) {  // from device to display
             html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "' onchange='onChange(this)'></td>";
         html += "<td>" + f.getDescription() + "</td></tr>";
     }
-    html += R"(<script>
-        var ws = new WebSocket('ws://' + location.hostname + '/ws');
-                    ws.onmessage = function(evt) {
-                try {
-                    var data = JSON.parse(evt.data);
-                    if (!Array.isArray(data)) return;
-                    var inputs = document.querySelectorAll("input[data-id]");
-                    // reload if number of fields changed (add or delete)
-                   data.forEach(f => {
-                        var el = document.querySelector("input[data-id='" + f.id + "']");
-                        if (el && document.activeElement !== el) {
-                            if (el.value !== f.value) {
-                                el.value = f.value;                                
-                                el.style.transition = "background-color 0.8s";// highlight change
-                                el.style.backgroundColor = "#fff3a0"; // light yellow
-                                setTimeout(() => {
-                                    el.style.backgroundColor = "";
-                                }, 800);
-                            }
-                        }
-                    });
-                } catch(e) {
-                    console.error("WS update error:", e);
-                }
-            };
-    
-    function onChange(el){
-        var val = el.value;
-        var id = el.getAttribute('data-id');
-        ws.send(JSON.stringify({action:'update',id:id,value:val}));
-    }
-    </script>)";
+    html += R"rawliteral(
+<style>
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+thead { background-color: #f0f0f0; }
+tbody td input { width: 100%; box-sizing: border-box; }
+</style>
+<table>
+<thead>
+<tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>
+</thead>
+<tbody id="data-body">
+<tr><td colspan="4" style="text-align:center;color:#777;">Waiting for data...</td></tr>
+</tbody>
+</table>
+)rawliteral";
+
     return html;
 }
 String generateMetadataPage() {
     String html;
     html += "<h1>Metadata</h1>";
-    html += "<p><a href='/'>Index</a> | <a href='/info'>Info</a> | <a href='/advanced'>Advanced</a></p>";
+    html += "<p><a href='/'>Status</a> | <a href='/info'>Info</a> | <a href='/advanced'>Advanced</a></p>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
@@ -177,18 +164,16 @@ String generateMetadataPage() {
 
 String generateAdvancedPage() {
     String html = generateMenu();
-    html += "<h1>Advanced</h1>";
-    html += "<h3>Device Management</h3>";
-    html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button>";
+    html += "<h1>Advanced Device Management</h1><hl>";
+    html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button><hl>";
     html += "<h3>Upload New Model JSON</h3>";
     html += "<textarea id='jsonInput' rows='10' cols='80' placeholder='Paste new model JSON here'></textarea><br>";
-    html += "<button onclick='uploadModel()'>Upload Model</button>";
-    html += "<h3>Factory Reset</h3>";
+    html += "<button onclick='uploadModel()'>Upload Model</button><hl>";
+    html += "<h3>Factory Reset</h3><hl>";
     html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults</button>";
-    html += "<h3>Factory Defaults Preview</h3>";
-    html += "<button onclick='showFactoryModel()'>Show Current Model</button> ";
+    html += "<h3>Factory Defaults Preview</h3><hl>";
+    html += "<button onclick='showFactoryModel()'>Show Current Model</button><hl> ";
     html += "<button onclick='showFactoryJson()'>Show Factory Default Model</button>";
-
     // ✅ Re-enable the display area for JSON output:
     html += "<h3>Model Output</h3><pre id='model-json' style='background:#eee;padding:10px;border:1px solid #ccc;max-height:400px;overflow:auto;'></pre>";
 
@@ -311,9 +296,7 @@ String generateChartPage() {
                     chartData.labels.shift();
                     chartData.datasets[0].data.shift();
                 }
-
                 tempChart.update();
-
                 // 🔸 Save chart data every few updates to localStorage
                 if (chartData.labels.length % 10 === 0) {
                     localStorage.setItem('tempChartData', JSON.stringify({
@@ -371,6 +354,7 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
     } else if (action == "uploadModel") {
+        Serial.println("got a uploadModel Ws action");
         String jsonStr = doc["json"] | "";
         if (JsonWrapper::checkJson(jsonStr)) {
             Controller::model.loadFromJson(jsonStr);
@@ -443,13 +427,16 @@ void setup() {
     else
         Serial.println("[FS] Mounted successfully.");
     // TODO stop everyhing if no SPIFF
-    Controller::model.load();
-    // Controller::model.initialize();
+    Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    if (Serial.available()) {
+        String line = Serial.readStringUntil('\n');
+        if (line.startsWith("!")) Controller::model.initialize();
+    }
     Controller::status(wifiStatus + ", " + when + ", " + dns + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(true)); });
-    server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateIndexPage(false)); });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateStatusPage(true)); });
+    server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateStatusPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
     server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateAdvancedPage()); });
     server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateChartPage()); });
@@ -497,7 +484,7 @@ void serialLoop() {
             jsonStr.trim();
             if (JsonWrapper::checkJson(jsonStr)) {
                 Controller::model.loadFromJson(jsonStr);
-                Serial.println("New replaced Json:" + String(Controller::model.toJsonString()));  // todo remove
+                Serial.println("Json replaced but not persisted !!!!!!!!!!!"); 
             } else {
                 Serial.println("New entered Json does not parse so Model remained unchanged");
             }
@@ -584,17 +571,19 @@ void serialLoop() {
             Serial.println("r                  : reset reinitialize fields with factory setting");
             Serial.println("restart            : Restart the ESP32");
             Serial.println("-----------------------------------\n");
-        } else {
+        } else {  // we assume this is like FieldName=newValue
             int eq = line.indexOf('=');
             if (eq > 0) {
                 String name = line.substring(0, eq);
                 String val = line.substring(eq + 1);
                 Field* f = Controller::model.getByName(name);
-                if (f && !f->getReadOnly()) {
+                if (f) {
                     f->setValue(val);
-                    Controller::model.saveToFile();
+                    if (f->getIsPersisted()) Controller::model.saveToFile();
                     Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
                     Controller::webSocket.textAll(Controller::model.toJsonString());
+                } else {
+                    Serial.printf("[SERIAL] !!! cannot find any field with this name");
                 }
             }
         }

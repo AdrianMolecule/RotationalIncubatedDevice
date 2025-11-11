@@ -10,7 +10,7 @@
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
-
+#include <cstdio>  // Required for snprintf
 #include <vector>
 
 #include "ActualMusic.h"
@@ -210,11 +210,12 @@ class BackEnd {
         // Get temperature
         float temperature;
         float humidity;
+        char charBuffer[16];//reused// A size of 16 is often safe for most floats.
         float dT = Controller::getI("desiredTemperature");
         if (((millis() - lastTempHumidityReadTime) / 1000) > 2) {  // every 2 seconds
             getTemperature(temperature, humidity);
             if (lastReadTemp != temperature) {  // avoid setting values that did not change
-                Controller::set("currentTemperature", String(temperature));
+                std::snprintf(charBuffer, sizeof(charBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
                 Controller::webSocket.textAll(Controller::model.toJsonString());
                 lastReadTemp = temperature;
             }
@@ -223,9 +224,8 @@ class BackEnd {
                 maxTemperature = temperature;
             }
             if (TEMPERATURE_DISPLAY) {
-                Serial.print("Current temp: " + String(temperature) + ", " + (!Controller::getBool("UseOneWireForTemperature") ? "Humidity:" + String(humidity) + " ," : ""));
-                Serial.print("DesiredTemperature: " + String(dT));
-                Serial.print(" max temperature: " + String(maxTemperature));
+                Serial.printf("Current temp: %.2f, %s", temperature, !Controller::getBool("UseOneWireForTemperature") ? Serial.printf("Humidity:%.2f ,", humidity), "" : "");
+                Serial.printf("DesiredTemperature:%.2f max temperature: %.2f", dT,maxTemperature);
                 if (TIME_DISPLAY) {
                     Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
                 } else {

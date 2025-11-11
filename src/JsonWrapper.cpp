@@ -109,6 +109,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
     file.close();
     return true;
 }
+
 bool JsonWrapper::checkJson(const String& jsonStr) {
     JsonDocument doc;
     auto error = deserializeJson(doc, jsonStr);

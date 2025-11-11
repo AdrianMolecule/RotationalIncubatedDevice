@@ -7,60 +7,61 @@ const String NOT_PRESENT = String("255");
 class Helper {
    public:
     Helper() = default;
+    static inline int idCounter=0;
     static void initialize(std::vector<Field>& fields) {
         fields.clear();
-        int idCounter = 0;
+
         // desired or set values AT this point for Tube rotator
-        fields.emplace_back(String(idCounter++), "status", "string", "No Errors", "error status for device",true/*RO*/,true/*shown */,false/*not persisted */); //MANDATORY
-        fields.emplace_back(String(idCounter++), "desiredTemperature", "float", "37", "desired Temperature",false,true);
-        fields.emplace_back(String(idCounter++), "currentTemperature", "float", "-1", "current Temperature", false,true,false);
-        fields.emplace_back(String(idCounter++), "currentHeaterOn", "bool", "0", "shows current heater state controlled by the device but overridden by HeaterDisabled ", true,true,false);
-        fields.emplace_back(String(idCounter++), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.",false,true);
-        fields.emplace_back(String(idCounter++), "desiredHeatingEndDurationInMinutes", "int", NOT_PRESENT, "desiredEndTime. Set an end time alarm in minutes like 60 for 1 hour from start or -1 for no alarm. You can separately reset the start time to now.",false,true);
-        fields.emplace_back(String(idCounter++), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400",false,true);
-        fields.emplace_back(String(idCounter++), "heartBeat", "string", "-", "Should change all every time a new temp is read",true,true,false);//readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "error status for device",true/*RO*/,true/*shown */,false/*not persisted */); //MANDATORY
+        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature",false,true);
+        fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true,true,false);
+        fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true,true,false);
+        fields.emplace_back(getNextIdStr(), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.",false,true);
+        fields.emplace_back(getNextIdStr(), "desiredHeatingEndDurationInMinutes", "int", NOT_PRESENT, "desiredEndTime. Set an end time alarm in minutes like 60 for 1 hour from start or -1 for no alarm. You can separately reset the start time to now.",false,true);
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400",false,true);
+        fields.emplace_back(getNextIdStr(), "heartBeat", "string", "-", "Should change all every time a new temp is read",true,true,false);//readonly isSHown, is not persisted
         // on offs read from UI and set on the board. They might be overridden by physical switches
-        fields.emplace_back(String(idCounter++), "StepperOn", "bool", "0", "turns on off stepper",false,true,false);  //"1"
-        fields.emplace_back(String(idCounter++), "FanOn", "bool", "1", "turns on off fan if capability exists",false,true);
-        fields.emplace_back(String(idCounter++), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp",false,true);
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "0", "turns on off stepper",false,true,false);  //"1"
+        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists",false,true);
+        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp",false,true);
         // pins
-        fields.emplace_back(String(idCounter++), "TempSensorPin", "uint8_t", "19", "TempSensorPin", false);  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
-        fields.emplace_back(String(idCounter++), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin", false);  // 32 is internally connected to spindle*/,
-        fields.emplace_back(String(idCounter++), "StepperPwmStepPin", "uint8_t", String(22), "StepperPwmStepPin", false);
+        fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin", false);  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
+        fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin", false);  // 32 is internally connected to spindle*/,
+        fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", "22", "StepperPwmStepPin", false);
         // misc
-        fields.emplace_back(String(idCounter++), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin", false);
-        fields.emplace_back(String(idCounter++), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin", false);
-        fields.emplace_back(String(idCounter++), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin", false);
-        fields.emplace_back(String(idCounter++), "SpeakerPin", "uint8_t", "25", "SpeakerPin", false);  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing the GPIO 25 signal and the other providing a GND (ground) connection.
-        fields.emplace_back(String(idCounter++), "FanPin", "uint8_t", NOT_PRESENT, "FanPin", false);
-        fields.emplace_back(String(idCounter++), "LedPin", "uint8_t", String(2), "LedPin", false);
-        fields.emplace_back(String(idCounter++), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin", false);
-        fields.emplace_back(String(idCounter++), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin", false);
+        fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin", false);
+        fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin", false);
+        fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin", false);
+        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "25", "SpeakerPin", false);  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing the GPIO 25 signal and the other providing a GND (ground) connection.
+        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin", false);
+        fields.emplace_back(getNextIdStr(), "LedPin", "uint8_t", "2", "LedPin", false);
+        fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin", false);
+        fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin", false);
         //
-        fields.emplace_back(String(idCounter++), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle", false, true);
-        fields.emplace_back(String(idCounter++), "MKSBoard", "bool", "1", "MKSBoard", false, true);
-        fields.emplace_back(String(idCounter++), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "set to the pin to read the on-off-physical button if present ",false,true);  // 36 Input /*Sensor_VP SVP -*/,
-        fields.emplace_back(String(idCounter++), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode",false,true);//maybe 26
+        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle", false, true);
+        fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "1", "MKSBoard", false, true);
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "set to the pin to read the on-off-physical button if present ",false,true);  // 36 Input /*Sensor_VP SVP -*/,
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode",false,true);//maybe 26
         //
-        fields.emplace_back(String(idCounter++), "MostMusicOff", "bool", "0", "MostMusicOff", false, true);                            // turns off all music except for errors, warnings, time reached and first time desired temperature reached
-        fields.emplace_back(String(idCounter++), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "MostMusicOff", false, true);                            // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         //
-        fields.emplace_back(String(idCounter++), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         // Preferences
-        // fields.emplace_back(String(idCounter++), "preference_TimeDisplay", "bool", "1", "preference_TimeDisplay");
-        // fields.emplace_back(String(idCounter++), "preference_TemperatureDisplay", "bool", "1", "preference_TemperatureDisplay");
-        // fields.emplace_back(String(idCounter++), "preference_TemperatureReached_MusicOn", "bool", "1", "preference_TemperatureReached_MusicOn");
+        // fields.emplace_back(getNextIdStr(), "preference_TimeDisplay", "bool", "1", "preference_TimeDisplay");
+        // fields.emplace_back(getNextIdStr(), "preference_TemperatureDisplay", "bool", "1", "preference_TemperatureDisplay");
+        // fields.emplace_back(getNextIdStr(), "preference_TemperatureReached_MusicOn", "bool", "1", "preference_TemperatureReached_MusicOn");
         //
-        fields.emplace_back(String(idCounter++), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..",false,true);
+        fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..",false,true);
         //
-        fields.emplace_back(String(idCounter++), "version", "string", "1.1", "Version", true, true);
+        fields.emplace_back(getNextIdStr(), "version", "string", "1.1", "Version", true, true);
     }
     static void initializeSample(std::vector<Field>& fields) {
         int idCounter = 0;
         // desired or set values
-        fields.emplace_back(String(idCounter++), "a", "float", "37", "desired Temperature");
-        fields.emplace_back(String(idCounter++), "b", "int", "0", "b");
-        fields.emplace_back(String(idCounter++), "sample version", "string", "sample", "Version", true);
+        fields.emplace_back(getNextIdStr(), "a", "float", "37", "desired Temperature");
+        fields.emplace_back(getNextIdStr(), "b", "int", "0", "b");
+        fields.emplace_back(getNextIdStr(), "sample version", "string", "sample", "Version", true);
         // todo add currentStartTime
     }
 
@@ -76,6 +77,20 @@ class Helper {
         strftime(buffer, sizeof(buffer), "%A, %b %d %Y %I:%M:%S %p", &timeinfo);
         return String(buffer);
     }
+    private:
+    static inline char buffer[4] = {0};//can hold 3 digits so up to 999
+
+    static const char* getNextIdStr() {
+        // snprintf safely formats the integer into the static buffer.
+        // We use the current value of counter, then increment it.
+        std::snprintf(buffer, sizeof(buffer), "%d", idCounter++);
+
+        // Return the address of he static buffer.
+        // The memory is valid after the function returns.
+        return buffer;
+    }
+
+
 };
 // Just for doc from prev version for MKS
 // // for m17hs16-2004s1 https://www.omc-stepperonline.com/nema-17-bipolar-45ncm-64oz-in-2a-42x42x40mm-4-wires-w-1m-cable-connector-17hs16-2004s1 and Imax=2 AMp hold torque=Holding Torque: 45Ncm(64oz.in)
@@ -109,30 +124,30 @@ class Helper {
 
 // some potential probably for my custom pcb:
 //  desired or set values AT this point for Tube rotator
-// fields.emplace_back(String(idCounter++), "desiredTemperature", "float", "37", "desired Temperature");
-// fields.emplace_back(String(idCounter++), "currentTemperature", "float", "-1", "current Temperature", true);
-// fields.emplace_back(String(idCounter++), "Rpm", "float ", "300", "current and desired RPM");
-// fields.emplace_back(String(idCounter++), "currentHeatingEndDurationInMinutes", "unsigned long ", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
+// fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature");
+// fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true);
+// fields.emplace_back(getNextIdStr(), "Rpm", "float ", "300", "current and desired RPM");
+// fields.emplace_back(getNextIdStr(), "currentHeatingEndDurationInMinutes", "unsigned long ", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
 // // on offs
-// fields.emplace_back(String(idCounter++), "StepperOn", "bool", "36   ", "turns on off stepper");  //"1"
-// fields.emplace_back(String(idCounter++), "FanOn", "bool", "1", "turns on off fan if capability exists");
-// fields.emplace_back(String(idCounter++), "HeaterOn", "bool", "1", "turns on off heater");
+// fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "36   ", "turns on off stepper");  //"1"
+// fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists");
+// fields.emplace_back(getNextIdStr(), "HeaterOn", "bool", "1", "turns on off heater");
 // // pins
-// fields.emplace_back(String(idCounter++), "HeaterPwmPin", "uint8_t", NOT_PRESENT, "Heater Pwm Pin", false);
-// fields.emplace_back(String(idCounter++), "StepperPwmStepPin", "uint8_t", String(25), "StepperPwmStepPin");
-// fields.emplace_back(String(idCounter++), "StepperEnablePin", "uint8_t", String(26), "StepperEnablePin");
-// fields.emplace_back(String(idCounter++), "I2SoClockPin", "uint8_t", NOT_PRESENT, "I2SoClockPin");
-// fields.emplace_back(String(idCounter++), "I2SoLatchPin", "uint8_t", NOT_PRESENT, "I2SoLatchPin");
-// fields.emplace_back(String(idCounter++), "LedPin", "uint8_t", String(2), "LedPin");
-// fields.emplace_back(String(idCounter++), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
-// fields.emplace_back(String(idCounter++), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
-// fields.emplace_back(String(idCounter++), "SpeakerPin", "uint8_t", String(32), "SpeakerPin");  // or String(12)
-// fields.emplace_back(String(idCounter++), "SpeakerChannel", "uint8_t", String(4), "SpeakerChannel");
-// fields.emplace_back(String(idCounter++), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");
-// fields.emplace_back(String(idCounter++), "FanPwmChannel", "uint8_t", NOT_PRESENT, "FanPwmChannel");
-// fields.emplace_back(String(idCounter++), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
+// fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", NOT_PRESENT, "Heater Pwm Pin", false);
+// fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", String(25), "StepperPwmStepPin");
+// fields.emplace_back(getNextIdStr(), "StepperEnablePin", "uint8_t", String(26), "StepperEnablePin");
+// fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", NOT_PRESENT, "I2SoClockPin");
+// fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", NOT_PRESENT, "I2SoLatchPin");
+// fields.emplace_back(getNextIdStr(), "LedPin", "uint8_t", String(2), "LedPin");
+// fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
+// fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
+// fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", String(32), "SpeakerPin");  // or String(12)
+// fields.emplace_back(getNextIdStr(), "SpeakerChannel", "uint8_t", String(4), "SpeakerChannel");
+// fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");
+// fields.emplace_back(getNextIdStr(), "FanPwmChannel", "uint8_t", NOT_PRESENT, "FanPwmChannel");
+// fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
 // // misc
-// fields.emplace_back(String(idCounter++), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");
-// fields.emplace_back(String(idCounter++), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle");
-// fields.emplace_back(String(idCounter++), "MKSBoard", "bool", "0", "MKSBoard");
-// fields.emplace_back(String(idCounter++), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");
+// fields.emplace_back(getNextIdStr(), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");
+// fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle");
+// fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "0", "MKSBoard");
+// fields.emplace_back(getNextIdStr(), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");

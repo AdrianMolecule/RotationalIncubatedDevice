@@ -216,6 +216,7 @@ class BackEnd {
             getTemperature(temperature, humidity);
             if (lastReadTemp != temperature) {  // avoid setting values that did not change
                 std::snprintf(charBuffer, sizeof(charBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
+                Controller::set("currentTemperature",charBuffer);
                 Controller::webSocket.textAll(Controller::model.toJsonString());
                 lastReadTemp = temperature;
             }

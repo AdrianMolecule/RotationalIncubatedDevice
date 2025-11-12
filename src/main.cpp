@@ -190,7 +190,8 @@ String generateMetadataPage() {
         value:document.getElementById('fvalue').value,
         description:document.getElementById('fdesc').value,
         readOnly:document.getElementById('freadonly').checked
-        isshown:document.getElementById('fisshown').checked
+        // isshown:document.getElementById('fisshown').checked
+        // ispersisted:document.getElementById('fispersisted').checked
         }};
         ws.send(JSON.stringify(msg));
         // clear inputs after sending
@@ -200,8 +201,8 @@ String generateMetadataPage() {
         document.getElementById('fvalue').value="";
         document.getElementById('fdesc').value="";
         document.getElementById('freadonly').checked=false;
-        document.getElementById('isshown').checked=false;
-        document.getElementById('ispersisted').checked=true;
+        document.getElementById('fisshown').checked=false;
+        document.getElementById('fispersisted').checked=true;
         }
         </script>
         )rawliteral";

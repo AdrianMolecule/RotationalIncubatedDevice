@@ -10,6 +10,7 @@
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
+
 #include <cstdio>  // Required for snprintf
 #include <vector>
 
@@ -17,6 +18,8 @@
 #include "Controller.h"
 #include "Helper.h"
 #include "Microstepping.h"
+#include "TimeManager.h"
+
 //
 void play(Melody melody);
 void play(Melody melody, bool force);
@@ -25,7 +28,7 @@ void stopStepper();
 void fanSetup();
 void fan(bool on);
 int readPotentiometer();
-void heater(bool on, float duty);
+void heater(bool on, float duty, float ledDuty);
 String getFormatedTimeSinceStart();
 void desiredEndTimeCheck();
 void setupI2SOShiftEnableMotor();
@@ -52,8 +55,8 @@ const float ModerateHeat_POWER = 0.9;
 // OneWire oneWire(Controller::getI("TempSensorPin"));  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
 // DallasTemperature tempSensor(&oneWire);
 //
-int lastTempHumidityReadTime = 0;  // never
-unsigned long lastAlertTime = 0;   // never
+int lastTempHumidityReadTime = 0;         // never
+unsigned long lastHumidityAlertTime = 0;  // never
 float minHumidity = 60.;
 bool firstTimeTurnOnHeater = true;
 bool firstTimeReachDesiredTemperature = true;
@@ -73,6 +76,7 @@ uint8_t HEATER_PWM_CHANNEL = 0;
 uint8_t STEPPER_PWM_CHANNEL = 2;
 uint8_t SPEAKER_CHANNEL = 4;
 uint8_t FAN_PWM_CHANNEL = 8;
+uint8_t LED_PWM_CHANNEL = 10;
 // WeMos D1 esp8266: D8 as standard
 const int chipSelect = SS;
 int currentStepsPerRotation = 200;          // TODO unused
@@ -92,13 +96,10 @@ enum Preference {  // for preferences
     TemperatureDisplay = true,
     TemperatureReached_MusicOn = true,
 };
-
 DHTesp dhTempSensor;          // used in setup and readTemperature
 OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
 DallasTemperature tempSensor = DallasTemperature();
 
-/* OneWire oneWire = OneWire(Controller::getILogged("TempSensorPin"));
-DallasTemperature tempSensor(); */
 class BackEnd {
    public:
     static inline unsigned long lastModelUpdateInSeconds = 0;
@@ -121,7 +122,11 @@ class BackEnd {
             // setStepsPerRotation(currentStepsPerRotation);
         }  // end just for the pcb
         //  Declare pins as output:
-        pinMode(Controller::getI("LedPin"), OUTPUT);
+        pinMode(Controller::getI("LedPwmPin"), OUTPUT);
+        ledcSetup(LED_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
+        delay(20);
+        ledcAttachPin(Controller::getI("LedPwmPin"), LED_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
+        delay(20);
         pinMode(Controller::getI("StepperPwmStepPin"), OUTPUT);
         pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
         pinMode(Controller::getI("I2SoClockPin"), OUTPUT);
@@ -129,7 +134,7 @@ class BackEnd {
         // pinMode(Controller::getI("FanPin"), OUTPUT);
         // // pinMode(Controller::getI("StepperEnablePin"), INPUT);
         // pinMode(Controller::getI("SpeakerPin"), OUTPUT);
-        // // alternate(LedPin, 50, 5);
+        // // alternate(LedPwmPin, 50, 5);
         // //   speaker
         ledcSetup(SPEAKER_CHANNEL, 5000, 8);
         ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
@@ -165,7 +170,7 @@ class BackEnd {
             Serial.println("Initial disabling of the stepper in setup");
             stopStepper();
             Serial.println("Initial disabling of the heater in setup");
-            heater(false, -1);
+            heater(false, -1, 0);
             Controller::setBool("currentHeaterOn", false);
             play(scaleLouder);
         } else {
@@ -177,8 +182,7 @@ class BackEnd {
             Serial.println("No fan for this device");
         }
         // setupSDCard();
-        Serial.print("maxHeaterDutyCycle as %=");
-        Serial.println(Controller::getI("maxHeaterDutyCycle"));
+        Serial.printf("maxHeaterDutyCycle %i as percentage\n",Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
         if (Controller::getI("desiredTemperature") == 30) {
@@ -210,13 +214,14 @@ class BackEnd {
         // Get temperature
         float temperature;
         float humidity;
-        char charBuffer[16];//reused// A size of 16 is often safe for most floats.
+        char charBuffer[16];  // reused// A size of 16 is often safe for most floats.
         float dT = Controller::getI("desiredTemperature");
-        if (((millis() - lastTempHumidityReadTime) / 1000) > 2) {  // every 2 seconds
+        int ledDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 5 : UNIVERSAL_MAX_DUTY_CYCLE;
+        if (((millis() - lastTempHumidityReadTime) / 1000) > 1) {  // every 1 seconds
             getTemperature(temperature, humidity);
             if (lastReadTemp != temperature) {  // avoid setting values that did not change
                 std::snprintf(charBuffer, sizeof(charBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
-                Controller::set("currentTemperature",charBuffer);
+                Controller::set("currentTemperature", charBuffer);
                 Controller::webSocket.textAll(Controller::model.toJsonString());
                 lastReadTemp = temperature;
             }
@@ -226,12 +231,12 @@ class BackEnd {
             }
             if (TEMPERATURE_DISPLAY) {
                 Serial.printf("Current temp: %.2f, %s", temperature, !Controller::getBool("UseOneWireForTemperature") ? Serial.printf("Humidity:%.2f ,", humidity), "" : "");
-                Serial.printf("DesiredTemperature:%.2f max temperature: %.2f", dT,maxTemperature);
-                if (TIME_DISPLAY) {
-                    Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
-                } else {
-                    Serial.println(" ");
-                }
+                Serial.printf("DesiredTemperature:%.2f max temperature: %.2f\n", dT, maxTemperature);
+                // if (TIME_DISPLAY) {
+                //     Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
+                // } else {
+                //     Serial.println(" ");
+                // }
             }
             if (temperature < dT) {
                 if (!Controller::getBool("currentHeaterOn")) {
@@ -241,9 +246,9 @@ class BackEnd {
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100, ledDuty);  // Heater start
                     } else {
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER, ledDuty);
                     }
                     Controller::setBool("currentHeaterOn", true);
                 }
@@ -259,15 +264,15 @@ class BackEnd {
                         }
                         firstTimeReachDesiredTemperature = false;
                     }
-                    heater(false, 0);  // second arg is ignored when heater is turned off
+                    heater(false, 0,0);  // second arg is ignored when heater is turned off
                     Controller::setBool("currentHeaterOn", false);
                 }
             }
-            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
                 Serial.println("WARNING !!! humidity dropped to less then minimal humidity");
                 unsigned long nowTime = millis();
-                if (nowTime > lastAlertTime + 2000) {
-                    lastAlertTime = nowTime;
+                if (nowTime > lastHumidityAlertTime + 2000) {
+                    lastHumidityAlertTime = nowTime;
                     play(invalidChoice);
                 }
             }
@@ -275,9 +280,14 @@ class BackEnd {
                 Controller::setNoLog("heartBeat", "|");
             else
                 Controller::setNoLog("heartBeat", "-");
-            desiredEndTimeCheck();
-            Controller::webSocket.textAll(Controller::model.toJsonString());
+            int r= TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
+            if (r==1) {// 0 means not yet, -1 means not set or errors
+                Serial.println("HeatingDateTimeWasReached reached");
+                play(scaleLouder, true);
+            }
+            // todo alarm
         }
+        Controller::webSocket.textAll(Controller::model.toJsonString());
     }
 };
 
@@ -555,10 +565,10 @@ void setLoudness(int loudness) {
     ledcWrite(SPEAKER_CHANNEL, map(loudness, -4, 4, MinHardware_LOUDNESS, MaxHardware_LOUDNESS));
 }
 //
-String getFormatedTimeSinceStart() {
-    unsigned long time = (unsigned long)((millis() - currentStartTime) / 1000);  // finds the time since last print in secs
-    return formatTime(time);
-}
+// String getFormatedTimeSinceStart() {
+//     unsigned long time = (unsigned long)((millis() - currentStartTime) / 1000);  // finds the time since last print in secs
+//     return formatTime(time);
+// }
 //
 void fanSetup() {
     pinMode(Controller::getI("FanPin"), OUTPUT);
@@ -590,14 +600,14 @@ void fan(bool on) {
     }
 }
 
-void heater(bool on, float duty) {
+void heater(bool on, float duty, float ledDuty) {
     // this works only after setup was called to initialize the channel
     if (on) {
         ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
-        digitalWrite(Controller::getI("LedPin"), HIGH);
+        ledcWrite(LED_PWM_CHANNEL, ledDuty);  // LED start
     } else {
         ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
-        digitalWrite(Controller::getI("LedPin"), LOW);
+        ledcWrite(LED_PWM_CHANNEL, 0);     // LED stop
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
         Serial.print("Heater set to: ");
@@ -660,19 +670,20 @@ void play(Melody melody, bool force) {
     }
 }
 //
-void desiredEndTimeCheck() {  // returns time to alarm
-    int det = Controller::getI("desiredHeatingEndDurationInMinutes");
-    if (det == -1) {
-        return;
-    }
-    unsigned int elapsedTimeInMilliSecs = (millis() - currentStartTime);
-    unsigned int timeToAlarmInSec = det * 60 - (unsigned long)(elapsedTimeInMilliSecs / 1000);
-    Controller::set("timeToAlarmInSec", String(timeToAlarmInSec));
-    if (det != -1 && det * 60 * 1000 <= elapsedTimeInMilliSecs) {
-        Serial.println("Desired end time " + String(det) + " reached. Current elapsed time: " + getFormatedTimeSinceStart());
-        play(scaleLouder, true);
-    }
-}
+//
+// void desiredEndTimeCheck() {  // returns time to alarm
+//     int det = Controller::getI("desiredHeatingEndDurationInMinutes");
+//     if (det == -1) {
+//         return;
+//     }
+//     unsigned int elapsedTimeInMilliSecs = (millis() - currentStartTime);
+//     unsigned int timeToAlarmInSec = det * 60 - (unsigned long)(elapsedTimeInMilliSecs / 1000);
+//     Controller::set("timeToAlarmInSec", String(timeToAlarmInSec));
+//     if (det != -1 && det * 60 * 1000 <= elapsedTimeInMilliSecs) {
+//         Serial.println("Desired end time " + String(det) + " reached. Current elapsed time: " + getFormatedTimeSinceStart());
+//         play(scaleLouder, true);
+//     }
+// }
 
 //
 void createDir(fs::FS& fs, const char* path) {

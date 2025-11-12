@@ -15,20 +15,21 @@
 #include "JsonWrapper.h"
 #include "Model.h"
 #include "Pass.h"
+#include "TimeManager.h"
 
 AsyncWebServer server(80);  // needs to persist beyond the method
 
 const String generateMenu() {
     return "<p>"
            "<a href='/'>Status</a> | "
-           "<a href='/info'>Info</a> | "
+           "<a href='/extended'>Extended</a> | "
            "<a href='/metadata'>Metadata</a> | "
            "<a href='/advanced'>Advanced</a> | "
            "<a href='/chart'>Chart</a> | "
            "</p>";
 }
 
-//rebuilds the whole table and overwrites user input if not fast also puts the wait for data message
+// rebuilds the whole table and overwrites user input if not fast also puts the wait for data message
 String generateStatusPage(bool brief) {
     String html = generateMenu();
     std::vector<Field> fi;
@@ -111,7 +112,6 @@ String generateStatusPage(bool brief) {
 
     return html;
 }
-
 String generateMetadataPage() {
     String html = generateMenu();
     html += "<h1>Metadata</h1>";
@@ -190,6 +190,7 @@ String generateMetadataPage() {
         value:document.getElementById('fvalue').value,
         description:document.getElementById('fdesc').value,
         readOnly:document.getElementById('freadonly').checked
+        isshown:document.getElementById('fisshown').checked
         }};
         ws.send(JSON.stringify(msg));
         // clear inputs after sending
@@ -455,10 +456,6 @@ void setup() {
     if (WiFi.status() == WL_CONNECTED) {
         wifiStatus = "[WiFi] Connected! IP: " + WiFi.localIP().toString();
         Serial.println(wifiStatus);
-        // Initialize and get the time from NTP server
-        configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-        when = " at:" + Helper::getTime();
-        Serial.println(when);
         if (MDNS.begin("bio")) {
             dns = "[mDNS] Registered as bio.local";
         } else {
@@ -478,11 +475,15 @@ void setup() {
         String line = Serial.readStringUntil('\n');
         if (line.startsWith("!")) Controller::model.initialize();
     }
-    Controller::status(wifiStatus + ", " + when + ", " + dns + ", ");
+    // Initialize and get the time from NTP server
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    const char* bootTime = TimeManager::getBootTimeAsString();
+    Controller::set("bootTime",bootTime);
+    Controller::status(wifiStatus + ", started at:" + bootTime + ", " + dns + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateStatusPage(true)); });
-    server.on("/info", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateStatusPage(false)); });
+    server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateStatusPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateMetadataPage()); });
     server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateAdvancedPage()); });
     server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", generateChartPage()); });

@@ -115,7 +115,6 @@ String generateStatusPage(bool brief) {
 String generateMetadataPage() {
     String html = generateMenu();
     html += "<h1>Metadata</h1>";
-    html += "<p><a href='/'>Status</a> | <a href='/info'>Info</a> | <a href='/advanced'>Advanced</a></p>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
@@ -190,8 +189,8 @@ String generateMetadataPage() {
         value:document.getElementById('fvalue').value,
         description:document.getElementById('fdesc').value,
         readOnly:document.getElementById('freadonly').checked
-        // isshown:document.getElementById('fisshown').checked
-        // ispersisted:document.getElementById('fispersisted').checked
+        //isshown:document.getElementById('fisshown').checked
+        //ispersisted:document.getElementById('fispersisted').checked
         }};
         ws.send(JSON.stringify(msg));
         // clear inputs after sending

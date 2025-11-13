@@ -66,13 +66,18 @@ class Model {
     bool loadFromJson(const String& json) {
         return JsonWrapper::jsonToFields(json, fields);
     }
+    /** normal load returns true, iniitalize returns false */
     bool load() {
-        JsonWrapper::loadFieldsFromFile(fields);
-        if (fields.empty()) {
-            initialize();
+        // Attempt to load from file. If successful AND fields are present, return true.
+        bool loadedFromFile = JsonWrapper::loadFieldsFromFile(fields);
+        if (loadedFromFile && !fields.empty()) {
+            return true;
+        } else {
+            // If load failed or file was empty, initialize factory model.
+            initialize();  // indicate that            
+            MyMusic::MajorAlarm("Could not load the last models so we initialized from code !");
             return false;
         }
-        return true;
     }
     bool saveToFile() {
         File file = SPIFFS.open("/model.json", "w");

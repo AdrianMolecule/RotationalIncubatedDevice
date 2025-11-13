@@ -1,5 +1,6 @@
 #include "JsonWrapper.h"
 
+#include <MyMusic.h>  // Include to use MyMusic::MajorAlarm
 #include <SPIFFS.h>
 
 const char* FILE_LOCATION = "/model.json";
@@ -18,6 +19,13 @@ const char* JsonWrapper::toJsonString(const std::vector<Field>& fields) {
         const auto& f = fields[i];
         // if(!f.getIsPersisted()) continue;
         if (i > 0) appendRaw(ptr, ",", end);
+        // CRITICAL CHECK: Ensure we haven't already exceeded the buffer size
+        if (ptr >= end - 50) {
+            MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  // CHANGED CALL
+            *ptr = ']';                                                   // Terminate the array immediately
+            *(ptr + 1) = '\0';
+            return jsonBuffer;
+        }
         appendRaw(ptr, "{\"id\":\"", end);
         appendEscaped(ptr, f.getId().c_str(), end);
         appendRaw(ptr, "\",\"name\":\"", end);
@@ -118,7 +126,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
     Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>Saving Model to Flash >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
     File file = SPIFFS.open(FILE_LOCATION, FILE_WRITE);
     if (!file) {
-        Serial.println("Error when trying to open the save-to file. Maybe the location of:" + String(FILE_LOCATION) + " is not correct or possible");
+        MyMusic::MajorAlarm("SPIFFS File Open Failed - Save Aborted.");  // CHANGED CALL
         return false;
     }
     file.print(toJsonString(fields));
@@ -134,9 +142,16 @@ bool JsonWrapper::checkJson(const String& jsonStr) {
 }
 
 bool JsonWrapper::loadFieldsFromFile(std::vector<Field>& fields) {
+    if (!SPIFFS.begin(false)) {
+        MyMusic::MajorAlarm("SPIFFS Initialization Failed - Cannot Load Model.");  // CHANGED CALL
+        return false;
+    }
     if (!SPIFFS.exists(FILE_LOCATION)) return false;
     File file = SPIFFS.open(FILE_LOCATION, FILE_READ);
-    if (!file) return false;
+    if (!file) {
+        MyMusic::MajorAlarm("SPIFFS File Open Failed - Load Aborted.");  // CHANGED CALL
+        return false;
+    }
     String s = file.readString();
     file.close();
     return jsonToFields(s, fields);

@@ -1,5 +1,4 @@
-#ifndef Pass_H_
-#define Pass_H_
+#pragma once
 #include <ArduinoJson.h>
 
 const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
@@ -24,5 +23,3 @@ const char * getPass(){
       return doc["password"];
   }
 }
-#endif /* Pass_H_ */
-#pragma once

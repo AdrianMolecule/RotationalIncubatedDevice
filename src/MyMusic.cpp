@@ -17,14 +17,14 @@ Melody auClairDeLaLune("cccde+dr  ceddc+.r");
 Melody darthVader(" (ggg e,-. b,-- | g e,-. b,-- g+ (ddde,-.)* b,--  | g, e,-. b,-- g+ | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. g,-- | b, g-. b,-- d*+  | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. b,-- | g e,-. b,-- g+ |)<<_ ");
 Melody temp30("(ab)x3");
 Melody temp37("(fg)x7");
-Melody FatalError("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
+Melody fatalError("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
 
 // CHANGED: Implementation now uses class scope
 void MyMusic::MajorAlarm(const char* message) {
     Serial.print("MAJOR ALARM: ");
     Controller::error(message);
     Serial.println(message);
-    MyMusic::play(FatalError);
+    MyMusic::play(fatalError);
 }
 
 void MyMusic::setLoudness(int loudness) {

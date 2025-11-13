@@ -23,4 +23,4 @@ extern Melody auClairDeLaLune;
 extern Melody darthVader;
 extern Melody temp30;
 extern Melody temp37;
-extern Melody FatalError;
+extern Melody fatalError;

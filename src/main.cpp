@@ -479,7 +479,7 @@ void setup() {
     // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
     bool res=Controller::model.load();  // check for emergency reinitialize if we messed up the model
     if(!res){
-        Controller::status("[FS] Could not load the model so we initialized from code.");
+        Controller::error("[FS] Could not load the model so we initialized from code.");
     }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');

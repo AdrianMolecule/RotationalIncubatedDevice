@@ -7,6 +7,7 @@ String JsonWrapper::toJsonString(const std::vector<Field>& fields){
     JsonDocument doc;  // sufficient size for fields
     JsonArray arr = doc.to<JsonArray>();
     for (const auto& f : fields) {
+        //if(!f.getIsPersisted()) continue;
         JsonObject obj = arr.add<JsonObject>();
         obj["id"] = f.getId();
         obj["name"] = f.getName();

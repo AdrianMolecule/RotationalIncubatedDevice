@@ -105,7 +105,7 @@ class BackEnd {
     static inline unsigned long lastModelUpdateInSeconds = 0;
 
     static void setupBackend() {
-        Serial.println("setupBackend begin begins XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
+        Serial.println("setupBackend begin ~~~~~~~");
         tempSensor.setOneWire(&oneWire);
         if (Controller::getPresent("StepperOnOffSwitchInputPin"))
             pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);

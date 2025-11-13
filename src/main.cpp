@@ -138,8 +138,8 @@ String generateMetadataPage() {
     html += "Value: <input id='fvalue'><br>";
     html += "Description: <input id='fdesc'><br>";
     html += "ReadOnly: <input id='freadonly' type='checkbox'><br>";
-    html += "IsShown: <input id='isshown' type='checkbox'><br>";
-    html += "IsPersisted: <input id='ispersisted' type='checkbox'><br>";
+    html += "IsShown: <input id='fisshown' type='checkbox'><br>";
+    html += "IsPersisted: <input id='fispersisted' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
     html += R"rawliteral(
                             <script>
@@ -182,16 +182,21 @@ String generateMetadataPage() {
         fid=(maxId+1).toString();
         document.getElementById('fid').value=fid;
     }
-    var msg={action:'add',field:{
-        id:fid,
-        name:document.getElementById('fname').value,
-        type:document.getElementById('ftype').value,
-        value:document.getElementById('fvalue').value,
-        description:document.getElementById('fdesc').value,
-        readOnly:document.getElementById('freadonly').checked
-        //isshown:document.getElementById('fisshown').checked
-        //ispersisted:document.getElementById('fispersisted').checked
-        }};
+    try {
+        var msg={action:'add',field:{
+            id:fid,
+            name:document.getElementById('fname').value,
+            type:document.getElementById('ftype').value,
+            value:document.getElementById('fvalue').value,
+            description:document.getElementById('fdesc').value,
+            readOnly:document.getElementById('freadonly').checked,
+            isShown:document.getElementById('fisshown').checked,
+            isPersisted:document.getElementById('fispersisted').checked
+            }};
+        } catch (error) {
+            alert(error.message);
+        }
+        //alert(" added field\n"+JSON.stringify(msg, null, 4));
         ws.send(JSON.stringify(msg));
         // clear inputs after sending
         document.getElementById('fid').value="";

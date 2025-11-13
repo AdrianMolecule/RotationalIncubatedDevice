@@ -12,7 +12,8 @@ class Helper {
         fields.clear();
 
         // desired or set values AT this point for Tube rotator
-        fields.emplace_back(getNextIdStr(), "status", "string", "", "error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "error", "", "error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);

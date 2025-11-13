@@ -1,7 +1,9 @@
 #pragma once
+#include <SPIFFS.h>
 #include "Field.h"
 #include "Helper.h"
 #include "JsonWrapper.h"
+#include "MyMusic.h"
 
 class Model {
    private:

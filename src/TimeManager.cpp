@@ -1,5 +1,6 @@
 #include "TimeManager.h"
 
+#include <Controller.h>
 #include <MyMusic.h>
 #include <WiFi.h>
 
@@ -82,42 +83,45 @@ const char* TimeManager::getBootTimeAsString() {
     return bts;
 }  // In src/TimeManager.cpp (add this function implementation):
 
-/** * Checks if the current time has reached or passed the time specified in dateTimeStr (HH:MM).
- * @param dateTimeStr The desired time in "HH:MM" format.
- * @return 1 if reached, 0 if not yet reached, -1 on error/not set.
- */
-int TimeManager::checkIfHeatingDateTimeWasReached(const char* dateTimeStr) {
-    if (dateTimeStr == nullptr || dateTimeStr[0] == '\0') {
-        Serial.println(" checkIfHeatingDateTimeWasReached 1");
+// Helper to convert a string (e.g., "2025-12-01 14:30:00") and its format to a numeric time_t value.
+time_t TimeManager::dateTimeStringToTimeT(const char* dateTimeStr, const char* format) {
+    struct tm timeinfo = {0};
+    // strptime reads the string into the tm structure based on the format.
+    if (strptime(dateTimeStr, format, &timeinfo) == NULL) {
+        Serial.printf("Error parsing date-time string: %s with format %s\n", dateTimeStr, format);
+        return (time_t)-1;
+    }
+    // MODIFICATION: Set seconds to zero to normalize the comparison time.
+    timeinfo.tm_sec = 0;
+    // mktime converts the tm structure (local time) into a numeric time_t timestamp.
+    return mktime(&timeinfo);
+}
+
+int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndTime) {
+    if (strcmp(desiredHeatingEndTime, "-1") == 0) {
         return -1;
+    }
+    time_t endTime_unix = TimeManager::dateTimeStringToTimeT(desiredHeatingEndTime, "%Y-%m-%d %H:%M:%S");
+    if (endTime_unix == -1) {
+        MyMusic::MajorAlarm("cannot get a time from that format.");
+        // Serial.printf("!!!!!! desiredHeatingEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredHeatingEndTime);
+        return -1;  // something wrong
     }
     struct tm timeinfo;
-    // Get the current local time. Returns false if time hasn't been synced (e.g., no WiFi/NTP error).
+    const char* formatStr = "2025-11-12 13:00:00";
     if (!getLocalTime(&timeinfo)) {
-        Serial.println(" checkIfHeatingDateTimeWasReached 2");
+        MyMusic::MajorAlarm("cannot get current time from wifi in checkIfHeatingDateTimeWasReached.");
         return -1;
     }
-    // Attempt to parse HH and MM from the string (e.g., "15:30")
-    int desiredHour, desiredMinute;
-    if (sscanf(dateTimeStr, "%d:%d", &desiredHour, &desiredMinute) != 2) {
-        return -1;  // Format error
+    // Convert the normalized current time structure to a numeric time_t timestamp.
+    time_t currentTime_normalized = mktime(&timeinfo);
+    if (currentTime_normalized < 100000) {
+        Serial.println("Error: Current time not yet synchronized.");
+        return -1;
     }
-    // Create a time structure for the desired end time, using TODAY's date/time
-    // fields from the current time, but replacing the hour and minute.
-    struct tm desiredTimeinfo = timeinfo;
-    desiredTimeinfo.tm_hour = desiredHour;
-    desiredTimeinfo.tm_min = desiredMinute;
-    desiredTimeinfo.tm_sec = 0;
-    // Convert both structures to UNIX timestamps (seconds since epoch) for comparison
-    time_t currentTime_unix = mktime(&timeinfo);
-    time_t desiredTime_unix = mktime(&desiredTimeinfo);
-    // Check if the current time is greater than or equal to the desired time
-    Serial.println(" checkIfHeatingDateTimeWasReached 3");
-    if (currentTime_unix >= desiredTime_unix) {
-        Serial.println(" checkIfHeatingDateTimeWasReached 4");
-        return 1;  // Heating end time reached
-    } else {
-        Serial.println(" checkIfHeatingDateTimeWasReached 5");
-        return 0;  // Not yet reached
-    }
+    // 3. Comparison Logic (now comparing normalized timestamps)
+    if (currentTime_normalized < endTime_unix) {
+        return 0;  // Current time is before target time
+    } else
+        return 1;  // Current time is equal or after target time}
 }

@@ -469,13 +469,18 @@ void setup() {
         Serial.println(dns);
     } else {
         wifiStatus = "[WiFi] Connection failed!";
+        MyMusic::MajorAlarm(wifiStatus.c_str());
     }
-    if (!SPIFFS.begin(false))
-        Controller::status("[FS] Mount failed!");
-    else
+    if (!SPIFFS.begin(false)) {
+        MyMusic::MajorAlarm("[FS] Mount failed!");
+    } else {
         Serial.println("[FS] Mounted successfully.");
-    // TODO stop everyhing if no SPIFF
-    Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    }
+    // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
+    bool res=Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    if(!res){
+        Controller::status("[FS] Could not load the model so we initialized from code.");
+    }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         if (line.startsWith("!")) Controller::model.initialize();
@@ -483,7 +488,7 @@ void setup() {
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();
-    Controller::set("bootTime",bootTime);
+    Controller::set("bootTime", bootTime);
     Controller::status(wifiStatus + ", started at:" + bootTime + ", " + dns + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());

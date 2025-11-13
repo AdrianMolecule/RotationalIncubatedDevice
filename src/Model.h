@@ -7,11 +7,10 @@ class Model {
    private:
     std::vector<Field> fields;
 
-    public:
+   public:
     std::vector<Field>& getFields() {
         return fields;
     }
-    
     std::vector<Field> getScreenFields() {
         std::vector<Field> shownFields;
         for (const Field& field : fields) {
@@ -21,24 +20,20 @@ class Model {
         }
         return shownFields;
     }
-
     Field* getById(const String& id) {
         for (auto& f : fields)
             if (f.getId() == id) return &f;
         return nullptr;
     }
-
     Field* getByName(const String& name) {
         for (auto& f : fields)
             if (f.getName() == name) return &f;
         return nullptr;
     }
-
     void add(Field f) {
         fields.push_back(f);
         Serial.println("[Model] added field " + f.getName());
     }
-
     bool remove(const String& id) {
         for (size_t i = 0; i < fields.size(); i++) {
             if (fields[i].getId() == id) {
@@ -49,7 +44,6 @@ class Model {
         }
         return false;
     }
-
     void reorder(const String& id, bool up) {
         for (size_t i = 0; i < fields.size(); i++) {
             if (fields[i].getId() == id) {
@@ -61,17 +55,14 @@ class Model {
             }
         }
     }
-
     void initialize() {
         Serial.println("[MODEL] Initialize model by loading factory hardcoded model");
         Helper::initialize(fields);
     }
-
     void initializeSample() {
         Serial.println("[MODEL] Initialize just SAMPLE model by loading factory model");
         Helper::initializeSample(fields);
     }
-
     bool loadFromJson(const String& json) {
         return JsonWrapper::jsonToFields(json, fields);
     }
@@ -83,7 +74,6 @@ class Model {
         }
         return true;
     }
-
     bool saveToFile() {
         File file = SPIFFS.open("/model.json", "w");
         if (!file) {
@@ -92,11 +82,9 @@ class Model {
         }
         return JsonWrapper::saveModelToFile(fields);
     }
-
-    String toJsonString() {
+    const char* toJsonString() {
         return JsonWrapper::toJsonString(fields);
     }
-
     String toBriefJsonString() {
         String result = "Brief for Fields size:" + String(fields.size());
         if (fields.size() >= 2) {
@@ -105,8 +93,7 @@ class Model {
         }
         return result;
     }
-
     void listSerial() {
         for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
     }
-};  // end Model
+};

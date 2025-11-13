@@ -6,23 +6,19 @@
 //  include the SD library:
 #include <DallasTemperature.h>
 #include <FS.h>
-#include <Melody.h>
+#include <MyMusic.h>
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
-
 #include <cstdio>  // Required for snprintf
 #include <vector>
-
-#include "ActualMusic.h"
+//
 #include "Controller.h"
 #include "Helper.h"
 #include "Microstepping.h"
 #include "TimeManager.h"
+#include "MyMusic.h"
 
-//
-void play(Melody melody);
-void play(Melody melody, bool force);
 void startStepper();
 void stopStepper();
 void fanSetup();
@@ -74,7 +70,6 @@ const bool LOG_STEPPER_ON_OFF_SWITCH_STATE = true;
 }  // namespace Debug
 uint8_t HEATER_PWM_CHANNEL = 0;
 uint8_t STEPPER_PWM_CHANNEL = 2;
-uint8_t SPEAKER_CHANNEL = 4;
 uint8_t FAN_PWM_CHANNEL = 8;
 uint8_t LED_PWM_CHANNEL = 10;
 // WeMos D1 esp8266: D8 as standard
@@ -139,13 +134,13 @@ class BackEnd {
         ledcSetup(SPEAKER_CHANNEL, 5000, 8);
         ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
         ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
-        play(validChoice);
+        MyMusic::play(validChoice);
         // temperature sensor
         if (Controller::getPresent("TempSensorPin")) {
             if (!Controller::getI("UseOneWireForTemperature")) {
                 dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
                 if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
-                    play(darthVader, true);
+                    MyMusic::play(darthVader, true);
                     Serial.println("No DHT22 found or not working properly!");
                 }
             } else {
@@ -172,7 +167,7 @@ class BackEnd {
             Serial.println("Initial disabling of the heater in setup");
             heater(false, -1, 0);
             Controller::setBool("currentHeaterOn", false);
-            play(scaleLouder);
+            MyMusic::play(scaleLouder);
         } else {
             Serial.println("No heater pin defined!");
         }
@@ -186,9 +181,9 @@ class BackEnd {
         float temperature;
         float humidity;
         if (Controller::getI("desiredTemperature") == 30) {
-            play(temp30);
+            MyMusic::play(temp30);
         } else if (Controller::getI("desiredTemperature") == 37) {
-            play(temp37);
+            MyMusic::play(temp37);
         }
         delay(300);
         startStepper();
@@ -242,7 +237,7 @@ class BackEnd {
                 if (!Controller::getBool("currentHeaterOn")) {
                     Serial.println("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
-                        play(auClairDeLaLune);
+                        MyMusic::play(auClairDeLaLune);
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {
@@ -260,7 +255,7 @@ class BackEnd {
                     Serial.println("Turning heater OFF");
                     if (firstTimeReachDesiredTemperature) {
                         if (Controller::getBool("TemperatureReachedMusicOn")) {
-                            play(frereJacquesFull, true);
+                            MyMusic::play(frereJacquesFull, true);
                         }
                         firstTimeReachDesiredTemperature = false;
                     }
@@ -273,7 +268,7 @@ class BackEnd {
                 unsigned long nowTime = millis();
                 if (nowTime > lastHumidityAlertTime + 2000) {
                     lastHumidityAlertTime = nowTime;
-                    play(invalidChoice);
+                    MyMusic::play(invalidChoice);
                 }
             }
             if (Controller::getS("heartBeat") == "-")
@@ -283,7 +278,7 @@ class BackEnd {
             int r= TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
             if (r==1) {// 0 means not yet, -1 means not set or errors
                 Serial.println("HeatingDateTimeWasReached reached");
-                play(scaleLouder, true);
+                MyMusic::play(scaleLouder, true);
             }
             // todo alarm
         }
@@ -371,13 +366,13 @@ int getTemperature(float& temp, float& humid) {
         // Check if any reads failed and exit early (to try again).
         if (dhTempSensor.getStatus() != 0) {
             Serial.println("my DHT12 error status: " + String(dhTempSensor.getStatusString()));
-            play(auClairDeLaLune);
+            MyMusic::play(auClairDeLaLune);
             return false;
         }
         temp = newValues.temperature;
         if (temp < 0 || temp > 70) {
             for (int i = 0; i < 10; i++) {
-                play(darthVader, true);  // temperature out of range
+                MyMusic::play(darthVader, true);  // temperature out of range
             }
         }
         humid = newValues.humidity;
@@ -542,13 +537,13 @@ int readTurnOnStepperButton() {
         if (lastStepperOnOffButtonState == HIGH && lastStepperOnOffButtonState == LOW) {
             if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
                 Serial.println("The stepper motor button was turned off");
-                play(validChoice);
+                MyMusic::play(validChoice);
             }
             ret = 0;
         } else if (lastStepperOnOffButtonState == LOW && lastStepperOnOffButtonState == HIGH) {
             if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
                 Serial.println("The stepper motor button was turned on");
-                play(validChoice);
+                MyMusic::play(validChoice);
             }
             ret = 1;
         }
@@ -556,13 +551,6 @@ int readTurnOnStepperButton() {
         lastStepperOnOffButtonState = lastStepperOnOffButtonState;
     }
     return ret;
-}
-//
-void setLoudness(int loudness) {
-    // Loudness could be use with a mapping function, according to your buzzer or sound-producing hardware
-    const int MinHardware_LOUDNESS = 0;
-    const int MaxHardware_LOUDNESS = 16;
-    ledcWrite(SPEAKER_CHANNEL, map(loudness, -4, 4, MinHardware_LOUDNESS, MaxHardware_LOUDNESS));
 }
 //
 // String getFormatedTimeSinceStart() {
@@ -636,39 +624,7 @@ String formatTime(unsigned long time) {
     return result;
 }
 //
-void play(Melody melody) {
-    if (Controller::getI("MostMusicOff")) {
-        return;
-    }
-    melody.restart();         // The melody iterator is restarted at the beginning.
-    while (melody.hasNext())  // While there is a next note to play.
-    {
-        melody.next();                                   // Move the melody note iterator to the next one.
-        unsigned int frequency = melody.getFrequency();  // Get the frequency in Hz of the curent note.
-        unsigned long duration = melody.getDuration();   // Get the duration in ms of the curent note.
-        unsigned int loudness = melody.getLoudness();    // Get the loudness of the curent note (in a subjective relative scale from -3 to +3).
-                                                         // Common interpretation will be -3 is really soft (ppp), and 3 really loud (fff).
-        if (frequency > 0) {
-            ledcWriteTone(SPEAKER_CHANNEL, frequency);
-            setLoudness(loudness);
-        } else {
-            ledcWrite(SPEAKER_CHANNEL, 0);
-        }
-        delay(duration);
-        // This 1 ms delay with no tone is added to let a "breathing" time between each note.
-        // Without it, identical consecutives notes will sound like just one long note.
-        ledcWrite(SPEAKER_CHANNEL, 0);
-        delay(1);
-    }
-    ledcWrite(SPEAKER_CHANNEL, 0);
-    delay(1000);
-}
 
-void play(Melody melody, bool force) {
-    if (force) {
-        play(melody);
-    }
-}
 //
 //
 // void desiredEndTimeCheck() {  // returns time to alarm
@@ -681,7 +637,7 @@ void play(Melody melody, bool force) {
 //     Controller::set("timeToAlarmInSec", String(timeToAlarmInSec));
 //     if (det != -1 && det * 60 * 1000 <= elapsedTimeInMilliSecs) {
 //         Serial.println("Desired end time " + String(det) + " reached. Current elapsed time: " + getFormatedTimeSinceStart());
-//         play(scaleLouder, true);
+//         MyMusic::play(scaleLouder, true);
 //     }
 // }
 

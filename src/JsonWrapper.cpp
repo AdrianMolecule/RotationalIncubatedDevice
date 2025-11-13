@@ -3,26 +3,43 @@
 #include <SPIFFS.h>
 
 const char* FILE_LOCATION = "/model.json";
-String JsonWrapper::toJsonString(const std::vector<Field>& fields){
-    JsonDocument doc;  // sufficient size for fields
-    JsonArray arr = doc.to<JsonArray>();
-    for (const auto& f : fields) {
-        //if(!f.getIsPersisted()) continue;
-        JsonObject obj = arr.add<JsonObject>();
-        obj["id"] = f.getId();
-        obj["name"] = f.getName();
-        obj["type"] = f.getType();
-        obj["value"] = f.getValue();
-        obj["description"] = f.getDescription();
-        obj["readOnly"] = f.getReadOnly();
-        obj["isShown"] = f.getIsShown();
-        obj["isPersisted"] = f.getIsPersisted();
+// STATIC BUFFER: Pre-allocated memory to prevent heap fragmentation
+static char jsonBuffer[8192];
+
+// Forward Declarations for Helpers
+void appendRaw(char*& ptr, const char* str, const char* end);
+void appendEscaped(char*& ptr, const char* str, const char* end);
+
+const char* JsonWrapper::toJsonString(const std::vector<Field>& fields) {
+    char* ptr = jsonBuffer;
+    const char* end = jsonBuffer + sizeof(jsonBuffer);
+    appendRaw(ptr, "[", end);
+    for (size_t i = 0; i < fields.size(); i++) {
+        const auto& f = fields[i];
+        // if(!f.getIsPersisted()) continue;
+        if (i > 0) appendRaw(ptr, ",", end);
+        appendRaw(ptr, "{\"id\":\"", end);
+        appendEscaped(ptr, f.getId().c_str(), end);
+        appendRaw(ptr, "\",\"name\":\"", end);
+        appendEscaped(ptr, f.getName().c_str(), end);
+        appendRaw(ptr, "\",\"type\":\"", end);
+        appendEscaped(ptr, f.getType().c_str(), end);
+        appendRaw(ptr, "\",\"value\":\"", end);
+        appendEscaped(ptr, f.getValue().c_str(), end);
+        appendRaw(ptr, "\",\"description\":\"", end);
+        appendEscaped(ptr, f.getDescription().c_str(), end);
+        appendRaw(ptr, "\",\"readOnly\":", end);
+        appendRaw(ptr, f.getReadOnly() ? "true" : "false", end);
+        appendRaw(ptr, ",\"isShown\":", end);
+        appendRaw(ptr, f.getIsShown() ? "true" : "false", end);
+        appendRaw(ptr, ",\"isPersisted\":", end);
+        appendRaw(ptr, f.getIsPersisted() ? "true" : "false", end);
+        appendRaw(ptr, "}", end);
     }
-    String result;
-    serializeJson(doc, result);
-    return result;
+    appendRaw(ptr, "]", end);
+    return jsonBuffer;
 }
-//
+
 String JsonWrapper::fieldToJsonString(const Field& f) {
     JsonDocument doc;
     JsonObject obj = doc.to<JsonObject>();
@@ -52,7 +69,6 @@ bool JsonWrapper::jsonToField(const String& jsonStr, Field& f) {
     f.setReadOnly(obj["readOnly"] | false);
     f.setIsShown(obj["isShown"] | false);
     f.setIsPersisted(obj["isPersisted"] | true);
-
     return true;
 }
 
@@ -105,8 +121,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
         Serial.println("Error when trying to open the save-to file. Maybe the location of:" + String(FILE_LOCATION) + " is not correct or possible");
         return false;
     }
-    String s = toJsonString(fields);
-    file.print(s);
+    file.print(toJsonString(fields));
     file.close();
     return true;
 }
@@ -119,11 +134,28 @@ bool JsonWrapper::checkJson(const String& jsonStr) {
 }
 
 bool JsonWrapper::loadFieldsFromFile(std::vector<Field>& fields) {
-    if (!SPIFFS.begin(true)) return false;
     if (!SPIFFS.exists(FILE_LOCATION)) return false;
     File file = SPIFFS.open(FILE_LOCATION, FILE_READ);
     if (!file) return false;
     String s = file.readString();
     file.close();
     return jsonToFields(s, fields);
+}
+
+// Helper Implementations moved to bottom
+void appendRaw(char*& ptr, const char* str, const char* end) {
+    while (*str && ptr < end - 1) {
+        *ptr++ = *str++;
+    }
+    *ptr = '\0';
+}
+
+void appendEscaped(char*& ptr, const char* str, const char* end) {
+    while (*str && ptr < end - 2) {
+        if (*str == '"' || *str == '\\') {
+            *ptr++ = '\\';
+        }
+        *ptr++ = *str++;
+    }
+    *ptr = '\0';
 }

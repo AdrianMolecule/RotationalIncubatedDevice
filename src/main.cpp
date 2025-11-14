@@ -36,7 +36,7 @@ String generateStatusPage(bool brief) {
     String html = generateMenu();
     std::vector<Field> fi;
     if (brief) {
-        html += "<h1>Status Page</h1>";
+        html += "<h1>The Status Page</h1>";
         fi = Controller::model.getScreenFields();
     } else {
         html += "<h1>Extended Page</h1>";
@@ -453,7 +453,7 @@ void setup() {
     int timeout = 0;
     while (WiFi.status() != WL_CONNECTED && timeout < 20) {
         delay(500);
-        Serial.print(".");
+        Serial.print(".");-
         timeout++;
     }
     Serial.println();
@@ -464,12 +464,12 @@ void setup() {
         wifiStatus = "[WiFi] Connected! IP: " + WiFi.localIP().toString();
         Serial.println(wifiStatus);
         setupOTA();
-        if (MDNS.begin("bio")) {
-            dns = "[mDNS] Registered as bio.local";
-        } else {
-            dns = "[mDNS] Failed to start mDNS";
-        }
-        Serial.println(dns);
+        // if (MDNS.begin("bio")) {
+        //     dns = "[mDNS] Registered as bio.local";
+        // } else {
+        //     dns = "[mDNS] Failed to start mDNS";
+        // }
+        // Serial.println(dns);
     } else {
         wifiStatus = "[WiFi] Connection failed!";
         MyMusic::MajorAlarm(wifiStatus.c_str());
@@ -657,11 +657,10 @@ void loop() {
 // --- OTA Setup Function ---
 void setupOTA() {
     // Use the same mDNS hostname
-    ArduinoOTA.setHostname("esp32");
-
+    ArduinoOTA.setHostname("bio");
+    Serial.println("ArduinoOTA.setHostname(bio) done");
     // Optional: Set a password for security
     // ArduinoOTA.setPassword("your_ota_password");
-
     // Configure callbacks for OTA events
     ArduinoOTA.onStart([]() {
         String type;
@@ -692,7 +691,6 @@ void setupOTA() {
         else if (error == OTA_END_ERROR)
             Serial.println("End Failed");
     });
-
     ArduinoOTA.begin();
     Serial.println("OTA service initialized.");
 }

@@ -10,21 +10,22 @@
 #include <OneWire.h>
 #include <SD.h>
 #include <SPI.h>
+
 #include <cstdio>  // Required for snprintf
 #include <vector>
 //
 #include "Controller.h"
 #include "Helper.h"
 #include "Microstepping.h"
-#include "TimeManager.h"
 #include "MyMusic.h"
+#include "TimeManager.h"
 
 void startStepper();
 void stopStepper();
 void fanSetup();
 void fan(bool on);
 int readPotentiometer();
-void heater(bool on, float duty, float ledDuty);
+void heater(bool on, float duty = 0);
 String getFormatedTimeSinceStart();
 void desiredEndTimeCheck();
 void setupI2SOShiftEnableMotor();
@@ -71,7 +72,7 @@ const bool LOG_STEPPER_ON_OFF_SWITCH_STATE = true;
 uint8_t HEATER_PWM_CHANNEL = 0;
 uint8_t STEPPER_PWM_CHANNEL = 2;
 uint8_t FAN_PWM_CHANNEL = 8;
-uint8_t LED_PWM_CHANNEL = 10;
+uint8_t LED_BLUE_PWM_CHANNEL = 10;
 // WeMos D1 esp8266: D8 as standard
 const int chipSelect = SS;
 int currentStepsPerRotation = 200;          // TODO unused
@@ -118,9 +119,9 @@ class BackEnd {
         }  // end just for the pcb
         //  Declare pins as output:
         pinMode(Controller::getI("LedPwmPin"), OUTPUT);
-        ledcSetup(LED_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
+        ledcSetup(LED_BLUE_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
         delay(20);
-        ledcAttachPin(Controller::getI("LedPwmPin"), LED_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
+        ledcAttachPin(Controller::getI("LedPwmPin"), LED_BLUE_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
         delay(20);
         pinMode(Controller::getI("StepperPwmStepPin"), OUTPUT);
         pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
@@ -165,7 +166,7 @@ class BackEnd {
             Serial.println("Initial disabling of the stepper in setup");
             stopStepper();
             Serial.println("Initial disabling of the heater in setup");
-            heater(false, -1, 0);
+            heater(false);
             Controller::setBool("currentHeaterOn", false);
             MyMusic::play(scaleLouder);
         } else {
@@ -177,7 +178,7 @@ class BackEnd {
             Serial.println("No fan for this device");
         }
         // setupSDCard();
-        Serial.printf("maxHeaterDutyCycle %i as percentage\n",Controller::getI("maxHeaterDutyCycle"));
+        Serial.printf("maxHeaterDutyCycle %i as percentage\n", Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
         if (Controller::getI("desiredTemperature") == 30) {
@@ -209,15 +210,16 @@ class BackEnd {
         // Get temperature
         float temperature;
         float humidity;
-        char charBuffer[16];  // reused// A size of 16 is often safe for most floats.
+        char tempCharBuffer[16];  // reused// A size of 16 is often safe for most floats.
         float dT = Controller::getI("desiredTemperature");
-        int ledDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 5 : UNIVERSAL_MAX_DUTY_CYCLE;
+        int ledBlueDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 10 : UNIVERSAL_MAX_DUTY_CYCLE;
+        ledcWrite(LED_BLUE_PWM_CHANNEL, ledBlueDuty);              // BLUE LED start
         if (((millis() - lastTempHumidityReadTime) / 1000) > 1) {  // every 1 seconds
             getTemperature(temperature, humidity);
             if (lastReadTemp != temperature) {  // avoid setting values that did not change
-                std::snprintf(charBuffer, sizeof(charBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
-                Controller::set("currentTemperature", charBuffer);
-                Controller::webSocket.textAll(Controller::model.toJsonString());
+                std::snprintf(tempCharBuffer, sizeof(tempCharBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
+                Controller::set("currentTemperature", tempCharBuffer);
+                // Controller::webSocket.textAll(Controller::model.toJsonString());//immediate UI update
                 lastReadTemp = temperature;
             }
             lastTempHumidityReadTime = millis();
@@ -233,17 +235,18 @@ class BackEnd {
                 //     Serial.println(" ");
                 // }
             }
-            if (temperature < dT) {
+            if (temperature < dT) {  // todo update the heater on off  faster
                 if (!Controller::getBool("currentHeaterOn")) {
                     Serial.println("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
+                        Serial.println("First time heater ON");
                         MyMusic::play(auClairDeLaLune);
                         firstTimeTurnOnHeater = false;
                     }
-                    if (dT - temperature >= 2) {
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100, ledDuty);  // Heater start
+                    if (dT - temperature >= 2) {                                                                // high temp difference
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
                     } else {
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER, ledDuty);
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
                     }
                     Controller::setBool("currentHeaterOn", true);
                 }
@@ -252,14 +255,13 @@ class BackEnd {
                 // }
             } else {  // temp is high enough no need to heat
                 if (Controller::getBool("currentHeaterOn")) {
-                    Serial.println("Turning heater OFF");
                     if (firstTimeReachDesiredTemperature) {
                         if (Controller::getBool("TemperatureReachedMusicOn")) {
                             MyMusic::play(frereJacquesFull, true);
                         }
                         firstTimeReachDesiredTemperature = false;
                     }
-                    heater(false, 0,0);  // second arg is ignored when heater is turned off
+                    heater(false);  // second arg is ignored when heater is turned off
                     Controller::setBool("currentHeaterOn", false);
                 }
             }
@@ -271,10 +273,9 @@ class BackEnd {
                     MyMusic::play(invalidChoice);
                 }
             }
-
             Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
-            int r= TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
-            if (r==1) {// 0 means not yet, -1 means not set or errors
+            int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
+            if (r == 1) {  // 0 means not yet, -1 means not set or errors
                 Serial.println("HeatingDateTimeWasReached reached");
                 MyMusic::play(scaleLouder, true);
             }
@@ -586,14 +587,12 @@ void fan(bool on) {
     }
 }
 
-void heater(bool on, float duty, float ledDuty) {
+void heater(bool on, float duty) {
     // this works only after setup was called to initialize the channel
     if (on) {
         ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
-        ledcWrite(LED_PWM_CHANNEL, ledDuty);  // LED start
     } else {
         ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
-        ledcWrite(LED_PWM_CHANNEL, 0);     // LED stop
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
         Serial.print("Heater set to: ");

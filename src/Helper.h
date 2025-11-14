@@ -10,7 +10,6 @@ class Helper {
     static inline int idCounter = 0;
     static void initialize(std::vector<Field>& fields) {
         fields.clear();
-
         // desired or set values AT this point for Tube rotator
         fields.emplace_back(getNextIdStr(), "status", "string", "", "status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "error", "error", "", "error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
@@ -18,7 +17,7 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
         fields.emplace_back(getNextIdStr(), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
-        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400", false, true);
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400");
         fields.emplace_back(getNextIdStr(), "time", "string", "no time", "show device current time/date", true, true, false);  // readonly isSHown, is not persisted
         // on offs read from UI and set on the board. They might be overridden by physical switches
         fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper", false, true, false);
@@ -50,11 +49,10 @@ class Helper {
 
         fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
         fields.emplace_back(getNextIdStr(), "alarmTurnHeatingOff", "bool", "0", "alarm will Turn Heating Off if alarm is set", false, true);
-        fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..", false, true);
+        fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
         //
         fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
-        fields.emplace_back(getNextIdStr(), "version", "string", "1.1", "Version", true, true, false);
-        fields.emplace_back(getNextIdStr(), "loopWaitTimeInSec", "int", "2", "extra wait in the loop", false, true, false);// I don't persist this and let it be the hard default 2 min when booting
+        fields.emplace_back(getNextIdStr(), "version", "string", " TR 1.1", "Version", true, true, false);
     }
     //
     static void initializeSample(std::vector<Field>& fields) {

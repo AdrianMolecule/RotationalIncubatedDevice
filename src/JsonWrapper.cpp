@@ -11,13 +11,12 @@ static char jsonBuffer[8192];
 void appendRaw(char*& ptr, const char* str, const char* end);
 void appendEscaped(char*& ptr, const char* str, const char* end);
 
-const char* JsonWrapper::toJsonString(const std::vector<Field>& fields) {
+const char* JsonWrapper::toJsonString(const std::vector<Field>& fields, bool justPersisted) {
     char* ptr = jsonBuffer;
     const char* end = jsonBuffer + sizeof(jsonBuffer);
     appendRaw(ptr, "[", end);
     for (size_t i = 0; i < fields.size(); i++) {
         const auto& f = fields[i];
-        // if(!f.getIsPersisted()) continue;
         if (i > 0) appendRaw(ptr, ",", end);
         // CRITICAL CHECK: Ensure we haven't already exceeded the buffer size
         if (ptr >= end - 50) {
@@ -33,7 +32,11 @@ const char* JsonWrapper::toJsonString(const std::vector<Field>& fields) {
         appendRaw(ptr, "\",\"type\":\"", end);
         appendEscaped(ptr, f.getType().c_str(), end);
         appendRaw(ptr, "\",\"value\":\"", end);
-        appendEscaped(ptr, f.getValue().c_str(), end);
+        if (justPersisted && !f.getIsPersisted()) {
+            appendEscaped(ptr, "", end);
+        }else{
+            appendEscaped(ptr, f.getValue().c_str(), end);
+        }
         appendRaw(ptr, "\",\"description\":\"", end);
         appendEscaped(ptr, f.getDescription().c_str(), end);
         appendRaw(ptr, "\",\"readOnly\":", end);
@@ -83,7 +86,11 @@ bool JsonWrapper::jsonToField(const String& jsonStr, Field& f) {
 bool JsonWrapper::jsonToFields(const String& jsonStr, std::vector<Field>& fields) {
     JsonDocument doc;
     auto error = deserializeJson(doc, jsonStr);
-    if (error) return false;
+    if (error) {
+        String er = String(": jsonToFields could not read as valid Json the string:") + String(jsonStr);
+        MyMusic::MajorAlarm(er.c_str());
+        return false;
+    }
     JsonArray arr = doc.as<JsonArray>();
     fields.clear();
     for (JsonObject obj : arr) {
@@ -129,7 +136,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
         MyMusic::MajorAlarm("SPIFFS File Open Failed - Save Aborted.");  // CHANGED CALL
         return false;
     }
-    file.print(toJsonString(fields));
+    file.print(toJsonString(fields, JUST_PERSISTED_FIELDS));
     file.close();
     return true;
 }

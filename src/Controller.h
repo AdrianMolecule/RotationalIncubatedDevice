@@ -71,15 +71,21 @@ class Controller {
     static void status(String msg) {
         Controller::set("status", Controller::getS("status") + "; " + msg);
     }
-    static inline int firstTime=true;
+    static inline int firstTime = true;
     static void error(String msg) {
-        if (Controller::getS("error").length() < 300) {
-            Controller::set("error", Controller::getS("error") + "; " + msg);
-        }else{
-            if (firstTime){
-                Controller::set("error", Controller::getS("error") + "; " + "....");
-                firstTime=false;
-            } 
+        Serial.println("Error" + String(msg));
+        const auto f = Controller::model.getByName("error");
+        if (f == nullptr) {
+            Serial.println("we cannot set the controller error because field \"error\" doees not exist in the current model");
+        } else {
+            if (Controller::getS("error").length() < 300) {
+                Controller::set("error", Controller::getS("error") + "; " + msg);
+            } else {
+                if (firstTime) {
+                    Controller::set("error", Controller::getS("error") + "; " + "....");
+                    firstTime = false;
+                }
+            }
         }
     }
 };

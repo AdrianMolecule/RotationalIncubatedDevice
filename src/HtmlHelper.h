@@ -1,9 +1,11 @@
-#pragma once
-#include "Controller.h"
-#include "Field.h"
-#include "Model.h"
+#pragma once 
+#include <Arduino.h>
 
 class HtmlHelper {
    public:
-    HtmlHelper() = default;
-};
+    static String generateStatusPage(bool brief);
+        static String generateChartPage();
+        static String generateMenu();  // you can implement or call existing menu code
+        static String generateMetadataPage();
+        static String generateAdvancedPage();
+    };

@@ -19,7 +19,7 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
         fields.emplace_back(getNextIdStr(), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
         fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400", false, true);
-        fields.emplace_back(getNextIdStr(), "heartBeat", "string", "-", "&hearts;   Should change all every time a new temp is read", true, true, false);  // readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "time", "string", "no time", "show device current time/date", true, true, false);  // readonly isSHown, is not persisted
         // on offs read from UI and set on the board. They might be overridden by physical switches
         fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper", false, true, false);
         fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists", false, true);

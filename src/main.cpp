@@ -146,7 +146,7 @@ void setup() {
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(true)); });
-    server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(false)); });
+    server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html  charset=utf-8", HtmlHelper::generateStatusPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateMetadataPage()); });
     server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateAdvancedPage()); });
     server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateChartPage()); });

@@ -1,11 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPmDNS.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
-#include <ArduinoOTA.h>
 
 #include <vector>
 
@@ -18,10 +18,10 @@
 #include "Pass.h"
 #include "TimeManager.h"
 
-    AsyncWebServer server(80);  // needs to persist beyond the method
+AsyncWebServer server(80);  // needs to persist beyond the method
 void setupOTA();
 
-    const String generateMenu() {
+const String generateMenu() {
     return "<p>"
            "<a href='/'>Status</a> | "
            "<a href='/extended'>Extended</a> | "
@@ -453,8 +453,8 @@ void setup() {
     int timeout = 0;
     while (WiFi.status() != WL_CONNECTED && timeout < 20) {
         delay(500);
-        Serial.print(".");-
-        timeout++;
+        Serial.print(".");
+        -timeout++;
     }
     Serial.println();
     String wifiStatus;
@@ -480,8 +480,8 @@ void setup() {
         Serial.println("[FS] Mounted successfully.");
     }
     // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
-    bool res=Controller::model.load();  // check for emergency reinitialize if we messed up the model
-    if(!res){
+    bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    if (!res) {
         Controller::error("[FS] Could not load the model so we initialized from code.");
     }
     if (Serial.available()) {

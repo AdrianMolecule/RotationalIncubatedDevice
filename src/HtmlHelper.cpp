@@ -15,10 +15,10 @@ String HtmlHelper::generateStatusPage(bool brief) {
     String html = HtmlHelper::generateMenu();
     std::vector<Field> fi;
     if (brief) {
-        html += "<h1>The Status Page</h1>";
+        html += "<h2>The Status</h2>";
         fi = Controller::model.getScreenFields();
     } else {
-        html += "<h1>Extended Page</h1>";
+        html += "<h2>Extended Page</h2>";
         fi = Controller::model.getFields();
     }
 
@@ -96,7 +96,7 @@ String HtmlHelper::generateStatusPage(bool brief) {
 
 String HtmlHelper::generateMetadataPage() {
     String html = HtmlHelper::generateMenu();
-    html += "<h1>Metadata</h1>";
+    html += "<h2>Metadata</h2>";
     html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
@@ -198,13 +198,13 @@ String HtmlHelper::generateMetadataPage() {
 
 String HtmlHelper::generateAdvancedPage() {
     String html = HtmlHelper::generateMenu();
-    html += "<h1>Advanced Device Management</h1><hl>";
+    html += "<h2>Advanced Device Management</h2><hl>";
     html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button><hl>";
     html += "<h3>Upload New Model JSON</h3>";
     html += "<textarea id='jsonInput' rows='10' cols='80' placeholder='Paste new model JSON here'></textarea><br>";
     html += "<button onclick='uploadModel()'>Upload Model</button><hl>";
     html += "<h3>Factory Reset</h3><hl>";
-    html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults</button>";
+    html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults and Save it in persistent store</button>";
     html += "<h3>Factory Defaults Preview</h3><hl>";
     html += "<button onclick='showFactoryModel()'>Show Current Model</button><hl> ";
     html += "<button onclick='showFactoryJson()'>Show Factory Default Model</button>";
@@ -257,7 +257,7 @@ String HtmlHelper::generateAdvancedPage() {
 }
 String HtmlHelper::generateChartPage() {
     String html = generateMenu();
-    html += "<h1>Live Temperature Chart</h1>";
+    html += "<h2>Live Temperature Chart</h2>";
     html += "<canvas id='tempChart' width='800' height='400' style='border:1px solid #ccc;'></canvas>";
     html += R"rawliteral(
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

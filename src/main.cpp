@@ -19,6 +19,7 @@
 #include "Pass.h"
 #include "TimeManager.h"
 
+#define DNS "tr"
 AsyncWebServer server(80);  // needs to persist beyond the method
 void setupOTA();
 
@@ -108,7 +109,6 @@ void setup() {
     Serial.println();
     String wifiStatus;
     String when;
-    String dns;
     if (WiFi.status() == WL_CONNECTED) {
         wifiStatus = "[WiFi] Connected! IP: " + WiFi.localIP().toString();
         Serial.println(wifiStatus);
@@ -148,7 +148,7 @@ void setup() {
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();
     Controller::set("bootTime", bootTime);
-    Controller::status(wifiStatus + ", started at:" + bootTime + ", " + dns + ", ");
+    Controller::status(wifiStatus + ", started at:" + bootTime + ", " + DNS + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(true)); });
@@ -314,8 +314,10 @@ void loop() {
 // --- OTA Setup Function ---
 void setupOTA() {
     // Use the same mDNS hostname
-    ArduinoOTA.setHostname("bio");
-    Serial.println("ArduinoOTA.setHostname(bio) done");
+    const char* hostname=DNS;
+    ArduinoOTA.setHostname(hostname);
+    Serial.print("ArduinoOTA.setHostname done:");
+    Serial.println(hostname);
     // Optional: Set a password for security
     // ArduinoOTA.setPassword("your_ota_password");
     // Configure callbacks for OTA events

@@ -1,8 +1,7 @@
 #include <Melody.h>
 //
-#include "MyMusic.h"
 #include "Controller.h"
-
+#include "MyMusic.h"
 
 const uint8_t SPEAKER_CHANNEL = 8;
 const int MinHardware_LOUDNESS = 0;
@@ -22,9 +21,9 @@ Melody fatalError("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
 // CHANGED: Implementation now uses class scope
 void MyMusic::MajorAlarm(const char* message) {
     Serial.print("MAJOR ALARM: ");
-    Controller::error(message);
     Serial.println(message);
     MyMusic::play(fatalError);
+    Controller::error(message);
 }
 
 void MyMusic::setLoudness(int loudness) {

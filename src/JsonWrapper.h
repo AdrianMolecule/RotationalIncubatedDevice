@@ -4,11 +4,13 @@
 #include <vector>
 
 #include "Field.h"
+#define JUST_PERSISTED_FIELDS 1
+#define ALL_FIELDS 0
 
 class JsonWrapper {
    public:
     // Convert vector of Fields -> JSON string
-    static const char* toJsonString(const std::vector<Field>& fields);
+    static const char* toJsonString(const std::vector<Field>& fields,bool justPersisted=false );
     // Convert a single Field -> JSON string
     static String fieldToJsonString(const Field& f);
     // Parse JSON string -> single Field

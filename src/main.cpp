@@ -13,15 +13,14 @@
 #include "Controller.h"
 #include "Field.h"
 #include "Helper.h"
+#include "HtmlHelper.h"
 #include "JsonWrapper.h"
 #include "Model.h"
 #include "Pass.h"
 #include "TimeManager.h"
-#include "HtmlHelper.h"
 
 AsyncWebServer server(80);  // needs to persist beyond the method
 void setupOTA();
-
 
 void handleWebSocketMessage(String msg) {  // from the UI to board
     JsonDocument doc;
@@ -124,6 +123,17 @@ void setup() {
         wifiStatus = "[WiFi] Connection failed!";
         MyMusic::MajorAlarm(wifiStatus.c_str());
     }
+    if (Serial.available()) {
+        String line = Serial.readStringUntil('\n');
+        if (line.startsWith("!")) {
+            Serial.println("!!!!! forced reinitialization of the model in setup");
+            Controller::model.initialize();
+        }
+        if (line.startsWith("@")) {
+            Serial.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!bailing out after getting WIFi connection to avoid reboots");
+            return;  // last resort so we can still use OTA
+        }
+    }
     if (!SPIFFS.begin(false)) {
         MyMusic::MajorAlarm("[FS] Mount failed!");
     } else {
@@ -133,10 +143,6 @@ void setup() {
     bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
     if (!res) {
         Controller::error("[FS] Could not load the model so we initialized from code.");
-    }
-    if (Serial.available()) {
-        String line = Serial.readStringUntil('\n');
-        if (line.startsWith("!")) Controller::model.initialize();
     }
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -166,6 +172,7 @@ void setup() {
     xTaskCreate(loopBackendTask, "LoopBackend", 8192, nullptr, 1, nullptr);
     Serial.println("[SYS] Main Setup complete.");
 }
+//
 void loopBackendTask(void* param) {
     for (;;) {
         // Place the original code from loopBackend here

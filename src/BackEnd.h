@@ -240,7 +240,7 @@ class BackEnd {
                     Serial.println("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
                         Serial.println("First time heater ON");
-                        MyMusic::play(auClairDeLaLune);
+                        //MyMusic::play(auClairDeLaLune);
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {                                                                // high temp difference
@@ -248,7 +248,6 @@ class BackEnd {
                     } else {
                         heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
                     }
-                    Controller::setBool("currentHeaterOn", true);
                 }
                 // else{
                 //  do nothing let it heat
@@ -278,8 +277,10 @@ class BackEnd {
             if (r == 1) {  // 0 means not yet, -1 means not set or errors
                 Serial.println("HeatingDateTimeWasReached reached");
                 MyMusic::play(scaleLouder, true);
+                if (Controller::getS("alarmTurnsHeatingOff")) {
+                    heater(false);
+                }
             }
-            // todo alarm
         }
         Controller::webSocket.textAll(Controller::model.toJsonString());
     }
@@ -591,8 +592,12 @@ void heater(bool on, float duty) {
     // this works only after setup was called to initialize the channel
     if (on) {
         ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
+        if (!Controller::getBool("currentHeaterOn"))
+            Controller::setBool("currentHeaterOn", true);
     } else {
         ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
+        if (Controller::getBool("currentHeaterOn"))
+            Controller::setBool("currentHeaterOn", false);
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
         Serial.print("Heater set to: ");

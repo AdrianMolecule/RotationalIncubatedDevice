@@ -11,18 +11,19 @@ class Helper {
     static void initialize(std::vector<Field>& fields) {
         fields.clear();
         // desired or set values AT this point for Tube rotator
-        fields.emplace_back(getNextIdStr(), "status", "string", "", "status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
-        fields.emplace_back(getNextIdStr(), "error", "error", "", "error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
-        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature", false, true);
-        fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true, true, false);
-        fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "error", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
+        fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
+        fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
         fields.emplace_back(getNextIdStr(), "Rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
-        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "desired microstepping, only 200,400 ... 6400");
-        fields.emplace_back(getNextIdStr(), "time", "string", "no time", "show device current time/date", true, true, false);  // readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "Desired microstepping, only 200,400 ... 6400");
+        fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
         // on offs read from UI and set on the board. They might be overridden by physical switches
-        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "turns on off stepper", false, true, false);
-        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists", false, true);
-        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "disables heater even if current temp lower than desired temp", false, true);
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "1", "Turns on off stepper", false, true, false);
+        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "Turns on off fan if capability exists", false, true);
+        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "Disables heater even if current temp lower than desired temp");
         // pins
         fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
         fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin");  // 32 is internally connected to spindle*/,
@@ -37,22 +38,21 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
         fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
         //
-        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle");
+        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "Max Heater Duty Cycle- normally 80-100%");
         fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "1", "MKSBoard");
-        fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "set to the pin to read the on-off-physical button if present ");                         // 36 Input /*Sensor_VP SVP -*/,
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "sets the pin to read the on-off-physical button if present ");                         // 36 Input /*Sensor_VP SVP -*/,
         fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode");  // maybe 26
         //
-        fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "MostMusicOff", false, true);                            // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "Most Music Off except for alarms", false, true);                            // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
         //
         fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
 
-        fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
-        fields.emplace_back(getNextIdStr(), "alarmTurnHeatingOff", "bool", "0", "alarm will Turn Heating Off if alarm is set", false, true);
+        fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "Heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
+        fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
         //
-        fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
-        fields.emplace_back(getNextIdStr(), "version", "string", " TR 1.1", "Version", true, true, false);
+        fields.emplace_back(getNextIdStr(), "version", "string", " TR 1.1", "Version", true, true, true);
     }
     //
     static void initializeSample(std::vector<Field>& fields) {

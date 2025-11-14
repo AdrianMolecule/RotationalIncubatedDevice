@@ -103,8 +103,7 @@ int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndT
     }
     time_t endTime_unix = TimeManager::dateTimeStringToTimeT(desiredHeatingEndTime, "%Y-%m-%d %H:%M:%S");
     if (endTime_unix == -1) {
-        MyMusic::MajorAlarm("cannot get a time from that format.");
-        // Serial.printf("!!!!!! desiredHeatingEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredHeatingEndTime);
+        //Serial.printf("!!!!!! desiredHeatingEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredHeatingEndTime);
         return -1;  // something wrong
     }
     struct tm timeinfo;

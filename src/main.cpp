@@ -19,7 +19,7 @@
 #include "Pass.h"
 #include "TimeManager.h"
 
-#define DNS "tr"
+#define DNS "os"
 AsyncWebServer server(80);  // needs to persist beyond the method
 void setupOTA();
 

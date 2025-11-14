@@ -271,10 +271,8 @@ class BackEnd {
                     MyMusic::play(invalidChoice);
                 }
             }
-            if (Controller::getS("heartBeat") == "-")
-                Controller::setNoLog("heartBeat", "|");
-            else
-                Controller::setNoLog("heartBeat", "-");
+
+            Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
             int r= TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
             if (r==1) {// 0 means not yet, -1 means not set or errors
                 Serial.println("HeatingDateTimeWasReached reached");

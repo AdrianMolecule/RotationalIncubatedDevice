@@ -110,7 +110,7 @@ class Controller {
 
    private:
     static void error(const char* msg) {
-        Serial.println("Error" + String(msg));
+        Serial.println("Error " + String(msg));
         const auto f = Controller::model.getByName("error");
         if (f == nullptr) {
             Serial.println("!!!! We cannot set the controller error because field \"error\" does not exist in the current model");
@@ -124,7 +124,7 @@ class Controller {
     }
     //
     static void warning(const char* msg) {
-        Serial.println("warning" + String(msg));
+        Serial.println("warning " + String(msg));
         const auto f = Controller::model.getByName("warning");
         if (f == nullptr) {
             Serial.println("!!!!! We cannot set the controller warning because field \"warning\" does not exist in the current model");
@@ -138,7 +138,7 @@ class Controller {
     }
     //
     static void info(const char* msg) {
-        Serial.println("info" + String(msg));
+        Serial.println("info " + String(msg));
         const auto f = Controller::model.getByName("info");
         if (f == nullptr) {
             Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");

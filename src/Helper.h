@@ -14,7 +14,7 @@ class Helper {
         // desired or set values AT this point for Tube rotator
         fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);      // MANDATORY
         fields.emplace_back(getNextIdStr(), "error", "error", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
-        fields.emplace_back(getNextIdStr(), "warning", "warning", "", "warnings", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "warning", "warning", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "info", "info", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);

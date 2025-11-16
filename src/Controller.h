@@ -19,6 +19,7 @@ class Controller {
         }
         return f->getValue().toInt();
     }
+    //
     static bool getPresent(String name) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
@@ -30,6 +31,7 @@ class Controller {
         else
             return !(f->getValue() == NOT_PRESENT);
     }
+    //
     static bool getBool(String name) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
@@ -38,6 +40,7 @@ class Controller {
         } else
             return f->getValue().compareTo("0");
     }
+    //
     static String getS(String name) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
@@ -46,6 +49,7 @@ class Controller {
         } else
             return f->getValue();
     }
+    //
     static void set(String name, String value) {
         Serial.println("Controller::setI called for the name " + name + " with value:" + value);
         const auto f = Controller::model.getByName(name);
@@ -54,6 +58,7 @@ class Controller {
         } else
             f->setValue(value);
     }
+    //
     static void setNoLog(String name, String value) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
@@ -61,6 +66,7 @@ class Controller {
         } else
             f->setValueQuiet(value);
     }
+    //
     static void setBool(String name, bool value) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
@@ -68,23 +74,35 @@ class Controller {
         } else
             f->setValue(value ? "1" : "0");
     }
+    //
     static void status(String msg) {
         Controller::set("status", Controller::getS("status") + "; " + msg);
     }
-    static inline int firstTime = true;
+    //
     static void error(String msg) {
         Serial.println("Error" + String(msg));
         const auto f = Controller::model.getByName("error");
         if (f == nullptr) {
-            Serial.println("we cannot set the controller error because field \"error\" doees not exist in the current model");
+            Serial.println("we cannot set the controller error because field \"error\" does not exist in the current model");
         } else {
-            if (Controller::getS("error").length() < 300) {
+            if (Controller::getS("error").length() < 400) {
                 Controller::set("error", Controller::getS("error") + "; " + msg);
-            } else {
-                if (firstTime) {
-                    Controller::set("error", Controller::getS("error") + "; " + "....");
-                    firstTime = false;
-                }
+            } else if (Controller::getS("error").length() < 450) {
+                Controller::set("error", Controller::getS("error") + "; ...");
+            }
+        }
+    }
+    //
+    static void warning(String msg) {
+        Serial.println("warning" + String(msg));
+        const auto f = Controller::model.getByName("warning");
+        if (f == nullptr) {
+            Serial.println("we cannot set the controller warning because field \"warning\" does not exist in the current model");
+        } else {
+            if (Controller::getS("warning").length() < 400) {
+                Controller::set("warning", Controller::getS("warning") + "; " + msg);
+            } else if (Controller::getS("warning").length() < 450) {
+                Controller::set("warning", Controller::getS("warning") + "; ...");
             }
         }
     }

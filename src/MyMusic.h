@@ -2,6 +2,7 @@
 #include <Melody.h>
 
 extern const uint8_t SPEAKER_CHANNEL;
+#define DNS "os"
 
 class MyMusic {
    public:
@@ -9,8 +10,9 @@ class MyMusic {
     static void play(Melody melody);
     static void play(Melody melody, bool force);
     static void setLoudness(int loudness);
-    // CHANGED: MajorAlarm is now a static method inside the class
-    static void MajorAlarm(const char* message);
+    static void ErrorAlarm(const char* message, bool setControllerError=true);
+    static void FatalErrorAlarm(const char* message, bool setControllerError=true);
+    static void WarningAlarm(const char* message, bool setControllerError = true);
 };
 
 // extern declarations for melodies
@@ -23,4 +25,7 @@ extern Melody auClairDeLaLune;
 extern Melody darthVader;
 extern Melody temp30;
 extern Melody temp37;
-extern Melody fatalError;
+extern Melody fatalErrorAlarm;
+extern Melody errorAlarm;
+extern Melody warningAlarm;
+

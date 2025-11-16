@@ -1,7 +1,6 @@
 #include "TimeManager.h"
 
 #include <Controller.h>
-#include <MyMusic.h>
 #include <WiFi.h>
 
 const long gmtOffset_sec = -14400;  // Adjusted from 3600 to -14400 (4 hours back for EST)
@@ -10,7 +9,7 @@ const int daylightOffset_sec = 3600;
 void TimeManager::initTime() {
     // If connection is not active, configTime will fail
     if (WiFi.status() != WL_CONNECTED) {
-        MyMusic::FatalErrorAlarm("WiFi NOT Connected - Time Sync Failed.");
+        Controller::fatalErrorAlarm("WiFi NOT Connected - Time Sync Failed.");
     }
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 }
@@ -19,7 +18,7 @@ const char* TimeManager::getCurrentTimeAsString() {
     struct tm timeinfo;
     // Check if time is available
     if (!getLocalTime(&timeinfo)) {
-        MyMusic::FatalErrorAlarm("NTP Time Sync Failed - No Network Time.");
+        Controller::fatalErrorAlarm("NTP Time Sync Failed - No Network Time.");
         const char* errorMsg = "Time Not Synced";
         strncpy(ts, errorMsg, TIME_STRING_BUFFER_SIZE);
         ts[TIME_STRING_BUFFER_SIZE - 1] = '\0';
@@ -109,7 +108,7 @@ int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndT
     struct tm timeinfo;
     const char* formatStr = "2025-11-12 13:00:00";
     if (!getLocalTime(&timeinfo)) {
-        MyMusic::FatalErrorAlarm("cannot get current time from wifi in checkIfHeatingDateTimeWasReached.");
+        Controller::fatalErrorAlarm("cannot get current time from wifi in checkIfHeatingDateTimeWasReached.");
         return -1;
     }
     // Convert the normalized current time structure to a numeric time_t timestamp.

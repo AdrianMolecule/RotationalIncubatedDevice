@@ -15,6 +15,7 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);      // MANDATORY
         fields.emplace_back(getNextIdStr(), "error", "error", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "warning", "warning", "", "warnings", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "info", "info", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);

@@ -203,7 +203,7 @@ class BackEnd {
     //////
     static void loopBackend() {
         if (first) {
-            Serial.println("[SYS] loopBackend Started.");
+            Serial.println("[SYS] loopBackend Started   -----------------------------------------");
             first = false;
         }
         processStepperStartOrStop();
@@ -214,7 +214,7 @@ class BackEnd {
         float dT = Controller::getI("desiredTemperature");
         int ledBlueDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 10 : UNIVERSAL_MAX_DUTY_CYCLE;
         ledcWrite(LED_BLUE_PWM_CHANNEL, ledBlueDuty);              // BLUE LED start
-        if (((millis() - lastTempHumidityReadTime) / 1000) > 1) {  // every 1 seconds
+        if (((millis() - lastTempHumidityReadTime) / 2000) > 1) {  // every 2 seconds
             getTemperature(temperature, humidity);
             if (lastReadTemp != temperature) {  // avoid setting values that did not change
                 std::snprintf(tempCharBuffer, sizeof(tempCharBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
@@ -227,7 +227,7 @@ class BackEnd {
                 maxTemperature = temperature;
             }
             if (TEMPERATURE_DISPLAY) {
-                Serial.printf("Current temp: %.2f, %s", temperature, !Controller::getBool("UseOneWireForTemperature") ? Serial.printf("Humidity:%.2f ,", humidity), "" : "");
+                Serial.printf(" Current temp: %.2f, %s", temperature, !Controller::getBool("UseOneWireForTemperature") ? Serial.printf("Humidity:%.2f ,", humidity), "" : "");
                 Serial.printf("DesiredTemperature:%.2f max temperature: %.2f\n", dT, maxTemperature);
                 // if (TIME_DISPLAY) {
                 //     Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
@@ -240,7 +240,7 @@ class BackEnd {
                     Serial.println("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
                         Serial.println("First time heater ON");
-                        //MyMusic::play(auClairDeLaLune);
+                        // MyMusic::play(auClairDeLaLune);
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {                                                                // high temp difference
@@ -265,7 +265,7 @@ class BackEnd {
                 }
             }
             if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
-                Serial.println("WARNING !!! humidity dropped to less then minimal humidity");
+                MyMusic::WarningAlarm("Humidity dropped to less then the minimal humidit of 60% hardcoded value");
                 unsigned long nowTime = millis();
                 if (nowTime > lastHumidityAlertTime + 2000) {
                     lastHumidityAlertTime = nowTime;
@@ -365,8 +365,8 @@ int getTemperature(float& temp, float& humid) {
         TempAndHumidity newValues = dhTempSensor.getTempAndHumidity();
         // Check if any reads failed and exit early (to try again).
         if (dhTempSensor.getStatus() != 0) {
-            Serial.println("my DHT12 error status: " + String(dhTempSensor.getStatusString()));
-            MyMusic::play(auClairDeLaLune);
+            //const char* bu[300];  // todo+ String(dhTempSensor.getStatusString())
+            MyMusic::WarningAlarm(" DHT12 error status");
             return false;
         }
         temp = newValues.temperature;
@@ -658,6 +658,7 @@ void processStepperStartOrStop() {
     if (Controller::getPresent("StepperOnOffSwitchInputPin")) {              // it's an end with the motor on signal so both the physical and soft on for motor to run
         int stepperHardwareSwitchOnOffPosition = readTurnOnStepperButton();  //-1 for unchanged
         if (stepperHardwareSwitchOnOffPosition != -1) {                      // todo revisit logic
+            Serial.println("Stepper switch toggled" + String(stepperHardwareSwitchOnOffPosition));
             if (stepperHardwareSwitchOnOffPosition == 1 && !tempIsStepperOn && desired) {
                 startStepper();
                 if (Controller::getPresent("FanPin")) fan(false);

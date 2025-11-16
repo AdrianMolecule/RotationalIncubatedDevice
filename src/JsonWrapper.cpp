@@ -20,7 +20,7 @@ const char* JsonWrapper::toJsonString(const std::vector<Field>& fields, bool jus
         if (i > 0) appendRaw(ptr, ",", end);
         // CRITICAL CHECK: Ensure we haven't already exceeded the buffer size
         if (ptr >= end - 50) {
-            MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  // CHANGED CALL
+            MyMusic::FatalErrorAlarm("JsonBuffer Overflow: Data truncated!");  // CHANGED CALL
             *ptr = ']';                                                   // Terminate the array immediately
             *(ptr + 1) = '\0';
             return jsonBuffer;
@@ -70,7 +70,9 @@ String JsonWrapper::fieldToJsonString(const Field& f) {
 bool JsonWrapper::jsonToField(const String& jsonStr, Field& f) {
     JsonDocument doc;
     auto error = deserializeJson(doc, jsonStr);
-    if (error) return false;
+    if (error){
+        MyMusic::ErrorAlarm("deserializeJson error");
+        return false;}
     JsonObject obj = doc.as<JsonObject>();
     f.setId(obj["id"] | "");
     f.setName(obj["name"] | "");
@@ -88,7 +90,7 @@ bool JsonWrapper::jsonToFields(const String& jsonStr, std::vector<Field>& fields
     auto error = deserializeJson(doc, jsonStr);
     if (error) {
         String er = String(": jsonToFields could not read as valid Json the string:") + String(jsonStr);
-        MyMusic::MajorAlarm(er.c_str());
+        MyMusic::FatalErrorAlarm(er.c_str());
         return false;
     }
     JsonArray arr = doc.as<JsonArray>();
@@ -133,7 +135,7 @@ bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
     Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>Saving Model to Flash >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
     File file = SPIFFS.open(FILE_LOCATION, FILE_WRITE);
     if (!file) {
-        MyMusic::MajorAlarm("SPIFFS File Open Failed - Save Aborted.");  // CHANGED CALL
+        MyMusic::FatalErrorAlarm("SPIFFS File Open Failed - Save Aborted.");  // CHANGED CALL
         return false;
     }
     file.print(toJsonString(fields, JUST_PERSISTED_FIELDS));
@@ -150,13 +152,13 @@ bool JsonWrapper::checkJson(const String& jsonStr) {
 
 bool JsonWrapper::loadFieldsFromFile(std::vector<Field>& fields) {
     if (!SPIFFS.begin(false)) {
-        MyMusic::MajorAlarm("SPIFFS Initialization Failed - Cannot Load Model.");  // CHANGED CALL
+        MyMusic::FatalErrorAlarm(" SPIFFS Initialization Failed - Cannot Load Model.");  // CHANGED CALL
         return false;
     }
     if (!SPIFFS.exists(FILE_LOCATION)) return false;
     File file = SPIFFS.open(FILE_LOCATION, FILE_READ);
     if (!file) {
-        MyMusic::MajorAlarm("SPIFFS File Open Failed - Load Aborted.");  // CHANGED CALL
+        MyMusic::FatalErrorAlarm("SPIFFS File Open Failed - Load Aborted.");  // CHANGED CALL
         return false;
     }
     String s = file.readString();

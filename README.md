@@ -1,4 +1,7 @@
 # 
+
+for connections schematics see MKS_DLC32 _V2.1_002_SCH.pdf in the root dir.
+
 This is the basic code for a generic rotational device like the orbital shaker or tube rotator
 it supports temperature and microstepping where available
 

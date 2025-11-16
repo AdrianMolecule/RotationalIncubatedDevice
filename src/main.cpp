@@ -19,7 +19,6 @@
 #include "Pass.h"
 #include "TimeManager.h"
 
-#define DNS "os"
 AsyncWebServer server(80);  // needs to persist beyond the method
 void setupOTA();
 
@@ -94,6 +93,26 @@ const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seco
 //
 void loopBackendTask(void* param);
 
+void spiffInit(){
+    // Attempt to mount without formatting
+    if (!SPIFFS.begin(false)) {
+        Serial.println("E (1843) SPIFFS: mount failed, -10025: Trying to format...");
+        MyMusic::FatalErrorAlarm("[FS] Mount failed! Trying to reformat", false);  // don't attmpt to set error as the model is not loaded
+        // Attempt to format and mount (this is the crucial step)
+        if (!SPIFFS.begin(true)) {
+            // If the format/mount also fails, this is a serious, unrecoverable error
+            Serial.println("FATAL: Format and Mount failed! Stopping here.");
+            // Stop execution, e.g., while(true); or an error handler
+            while (true);
+        } else {
+            // SUCCESS after a forced format
+            Serial.println("[FS] Reformat successful and Mounted.");
+        }
+    } else {
+        // SUCCESS on the initial attempt
+        Serial.println("[FS] Mounted successfully.");
+    }
+}
 //
 void setup() {
     Serial.begin(115200);
@@ -121,7 +140,7 @@ void setup() {
         // Serial.println(dns);
     } else {
         wifiStatus = "[WiFi] Connection failed!";
-        MyMusic::MajorAlarm(wifiStatus.c_str());
+        MyMusic::FatalErrorAlarm(wifiStatus.c_str());
     }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
@@ -134,13 +153,9 @@ void setup() {
             return;  // last resort so we can still use OTA
         }
     }
-    if (!SPIFFS.begin(false)) {
-        MyMusic::MajorAlarm("[FS] Mount failed!");
-    } else {
-        Serial.println("[FS] Mounted successfully.");
-    }
-    // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
-    bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    spiffInit();
+        // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
+        bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
     if (!res) {
         Controller::error("[FS] Could not load the model so we initialized from code.");
     }

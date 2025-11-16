@@ -34,7 +34,7 @@ void createDir(fs::FS& fs, const char* path);
 void writeFile(fs::FS& fs, const char* path, const String& message);
 String formatTime(unsigned long time);
 String getFormatedTimeSinceStart();
-int readTurnOnStepperButton();
+int readTurnOnStepperSwitch();
 void processStepperStartOrStop();
 void setupSDCard();
 void printDirectory(File dir, int numTabs);
@@ -85,8 +85,6 @@ const float HALF_DUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
 //
 bool tempIsStepperOn = false;  // TODO might need to be true because the first operation is to stop it
 //
-int lastStepperOnOffButtonState = LOW;  // this is use for debouncing the previous steady state from the input pin
-int lastFlickerableState = -100;
 enum Preference {  // for preferences
     TimeDisplay = true,
     TemperatureDisplay = true,
@@ -104,7 +102,9 @@ class BackEnd {
         Serial.println("setupBackend begin ~~~~~~~");
         tempSensor.setOneWire(&oneWire);
         if (Controller::getPresent("StepperOnOffSwitchInputPin"))
-            pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
+            //pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT); todo
+            Serial.println(" ==========executed pinMode(36, INPUT)");
+                pinMode(36, INPUT);
         if (Controller::getI("MKSBoard")) {
             Serial.println("Using MKS DLC32 v2.1 board specific setup");
         } else {  // this is ALL needed for my custom PCB
@@ -135,13 +135,13 @@ class BackEnd {
         ledcSetup(SPEAKER_CHANNEL, 5000, 8);
         ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
         ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
-        MyMusic::play(validChoice);
+        Controller::infoAlarm("speaker works");
         // temperature sensor
         if (Controller::getPresent("TempSensorPin")) {
             if (!Controller::getI("UseOneWireForTemperature")) {
                 dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
                 if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
-                    MyMusic::play(darthVader, true);
+                    Controller::warningAlarm("DHTesp::ERROR_TIMEOUT");
                     Serial.println("No DHT22 found or not working properly!");
                 }
             } else {
@@ -168,9 +168,8 @@ class BackEnd {
             Serial.println("Initial disabling of the heater in setup");
             heater(false);
             Controller::setBool("currentHeaterOn", false);
-            MyMusic::play(scaleLouder);
         } else {
-            Serial.println("No heater pin defined!");
+            Controller::infoAlarm("No heater pin defined!");
         }
         if (Controller::getPresent("FanPin")) {
             fanSetup();
@@ -182,9 +181,9 @@ class BackEnd {
         float temperature;
         float humidity;
         if (Controller::getI("desiredTemperature") == 30) {
-            MyMusic::play(temp30);
+            MyMusic::play(MyMusic::temp30);
         } else if (Controller::getI("desiredTemperature") == 37) {
-            MyMusic::play(temp37);
+            MyMusic::play(MyMusic::temp37);
         }
         delay(300);
         startStepper();
@@ -239,8 +238,7 @@ class BackEnd {
                 if (!Controller::getBool("currentHeaterOn")) {
                     Serial.println("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
-                        Serial.println("First time heater ON");
-                        // MyMusic::play(auClairDeLaLune);
+                        Controller::infoAlarm("First time heater ON");
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {                                                                // high temp difference
@@ -256,7 +254,7 @@ class BackEnd {
                 if (Controller::getBool("currentHeaterOn")) {
                     if (firstTimeReachDesiredTemperature) {
                         if (Controller::getBool("TemperatureReachedMusicOn")) {
-                            MyMusic::play(frereJacquesFull, true);
+                            Controller::infoAlarm("firstTimeReachDesiredTemperature");
                         }
                         firstTimeReachDesiredTemperature = false;
                     }
@@ -265,18 +263,17 @@ class BackEnd {
                 }
             }
             if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
-                MyMusic::WarningAlarm("Humidity dropped to less then the minimal humidit of 60% hardcoded value");
+                Controller::warningAlarm("Humidity dropped to less then the minimal humidit of 60% hardcoded value");
                 unsigned long nowTime = millis();
-                if (nowTime > lastHumidityAlertTime + 2000) {
+                if (nowTime > lastHumidityAlertTime + 4000) {
                     lastHumidityAlertTime = nowTime;
-                    MyMusic::play(invalidChoice);
+                    MyMusic::play(MyMusic::invalidChoice);
                 }
             }
             Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
             int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
             if (r == 1) {  // 0 means not yet, -1 means not set or errors
-                Serial.println("HeatingDateTimeWasReached reached");
-                MyMusic::play(scaleLouder, true);
+                Controller::infoAlarm("HeatingDateTimeWasReached reached");
                 if (Controller::getS("alarmTurnsHeatingOff")) {
                     heater(false);
                 }
@@ -366,13 +363,13 @@ int getTemperature(float& temp, float& humid) {
         // Check if any reads failed and exit early (to try again).
         if (dhTempSensor.getStatus() != 0) {
             //const char* bu[300];  // todo+ String(dhTempSensor.getStatusString())
-            MyMusic::WarningAlarm(" DHT12 error status");
+            Controller::errorAlarm(" DHT12 error status, probably skipped on temp read");
             return false;
         }
         temp = newValues.temperature;
         if (temp < 0 || temp > 70) {
             for (int i = 0; i < 10; i++) {
-                MyMusic::play(darthVader, true);  // temperature out of range
+                Controller::errorAlarm("temperature out of range 0-70");
             }
         }
         humid = newValues.humidity;
@@ -516,39 +513,42 @@ void writeFile(fs::FS& fs, const char* path, const String& message) {
 // de-bounce variables
 const int DebounceTime = 200;
 unsigned long lastDebounceTime = 0;
+int lastSteadyState = LOW;// the previous steady state from the input pin
+int lastFlickerableState = -100;// the previous flicker-able state from the input pin
+int lastStepperOnOffSwitchState;
 /** return -1 if unchanged and 0 for off and 1 for on*/
-int readTurnOnStepperButton() {
-    lastStepperOnOffButtonState = !digitalRead(Controller::getI("StepperOnOffSwitchInputPin"));
+int readTurnOnStepperSwitch() {
+    lastStepperOnOffSwitchState = !digitalRead(Controller::getI("StepperOnOffSwitchInputPin"));
+    //lastStepperOnOffSwitchState = !digitalRead(36); //todo
     int ret = -1;  // means unchanged
     // check to see if you just pressed the button
     // (i.e. the input went from LOW to HIGH), and you've waited long enough
     // since the last press to ignore any noise:
     // If the switch/button changed, due to noise or pressing:
-    if (lastStepperOnOffButtonState != lastFlickerableState) {
+    if (lastStepperOnOffSwitchState != lastFlickerableState) {
         // reset the debouncing timer
         lastDebounceTime = millis();
         // save the the last flickerable state
-        lastFlickerableState = lastStepperOnOffButtonState;
+        lastFlickerableState = lastStepperOnOffSwitchState;
     }
     if ((millis() - lastDebounceTime) > DebounceTime) {
         // whatever the reading is at, it's been there for longer than the debounce
         // delay, so take it as the actual current state:
         // if the button state has changed:
-        if (lastStepperOnOffButtonState == HIGH && lastStepperOnOffButtonState == LOW) {
+        if (lastSteadyState == HIGH && lastStepperOnOffSwitchState == LOW) {
             if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
-                Serial.println("The stepper motor button was turned off");
-                MyMusic::play(validChoice);
+                Controller::infoAlarm("The stepper motor switch was turned off");
             }
             ret = 0;
-        } else if (lastStepperOnOffButtonState == LOW && lastStepperOnOffButtonState == HIGH) {
+        } else if (lastSteadyState == LOW && lastStepperOnOffSwitchState == HIGH) {
             if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
-                Serial.println("The stepper motor button was turned on");
-                MyMusic::play(validChoice);
+                Serial.println("The stepper motor switch was turned on");
+                Controller::infoAlarm("The stepper motor switch was turned on");
             }
             ret = 1;
         }
         // save the the last steady state
-        lastStepperOnOffButtonState = lastStepperOnOffButtonState;
+        lastSteadyState = lastStepperOnOffSwitchState;
     }
     return ret;
 }
@@ -656,7 +656,7 @@ void createDir(fs::FS& fs, const char* path) {
 void processStepperStartOrStop() {
     bool desired = Controller::getBool("StepperOn");
     if (Controller::getPresent("StepperOnOffSwitchInputPin")) {              // it's an end with the motor on signal so both the physical and soft on for motor to run
-        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperButton();  //-1 for unchanged
+        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();  //-1 for unchanged
         if (stepperHardwareSwitchOnOffPosition != -1) {                      // todo revisit logic
             Serial.println("Stepper switch toggled" + String(stepperHardwareSwitchOnOffPosition));
             if (stepperHardwareSwitchOnOffPosition == 1 && !tempIsStepperOn && desired) {

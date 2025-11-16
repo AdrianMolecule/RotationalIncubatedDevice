@@ -93,11 +93,11 @@ const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seco
 //
 void loopBackendTask(void* param);
 
-void spiffInit(){
+void spiffInit() {
     // Attempt to mount without formatting
     if (!SPIFFS.begin(false)) {
         Serial.println("E (1843) SPIFFS: mount failed, -10025: Trying to format...");
-        MyMusic::FatalErrorAlarm("[FS] Mount failed! Trying to reformat", false);  // don't attmpt to set error as the model is not loaded
+        Controller::fatalErrorAlarm("[FS] Mount failed! Trying to reformat");  
         // Attempt to format and mount (this is the crucial step)
         if (!SPIFFS.begin(true)) {
             // If the format/mount also fails, this is a serious, unrecoverable error
@@ -140,7 +140,7 @@ void setup() {
         // Serial.println(dns);
     } else {
         wifiStatus = "[WiFi] Connection failed!";
-        MyMusic::FatalErrorAlarm(wifiStatus.c_str());
+        Controller::fatalErrorAlarm(wifiStatus.c_str());
     }
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
@@ -154,10 +154,9 @@ void setup() {
         }
     }
     spiffInit();
-        // TODO stop ev MyMusic::MajorAlarm("JsonBuffer Overflow: Data truncated!");  eryhing if no SPIFF
-        bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
     if (!res) {
-        Controller::error("[FS] Could not load the model so we initialized from code.");
+        Controller::fatalErrorAlarm("[FS] Could not load the model so we initialized from code.");
     }
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -329,12 +328,10 @@ void loop() {
 // --- OTA Setup Function ---
 void setupOTA() {
     // Use the same mDNS hostname
-    const char* hostname=DNS;
+    const char* hostname = DNS;
     ArduinoOTA.setHostname(hostname);
-    Serial.print("ArduinoOTA.setHostname done:");
-    Serial.println(hostname);
-    // Optional: Set a password for security
-    // ArduinoOTA.setPassword("your_ota_password");
+    Serial.printf("ArduinoOTA.setHostname done, %s %s:", hostname, ".local");
+    // Optional: Set a password for security  // ArduinoOTA.setPassword("your_ota_password");
     // Configure callbacks for OTA events
     ArduinoOTA.onStart([]() {
         String type;

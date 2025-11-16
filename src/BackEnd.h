@@ -20,8 +20,8 @@
 #include "MyMusic.h"
 #include "TimeManager.h"
 
-void startStepper();
-void stopStepper();
+void startStepperIfNotStarted();
+void stopStepperIfNotStopped();
 void fanSetup();
 void fan(bool on);
 int readPotentiometer();
@@ -83,7 +83,7 @@ const float UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 
 const float MODERATE_HEAT_POWER = 0.89;
 const float HALF_DUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
 //
-bool tempIsStepperOn = false;  // TODO might need to be true because the first operation is to stop it
+bool tempIsStepperOn = false;  // the first operation in setup is to stop it
 //
 enum Preference {  // for preferences
     TimeDisplay = true,
@@ -102,9 +102,7 @@ class BackEnd {
         Serial.println("setupBackend begin ~~~~~~~");
         tempSensor.setOneWire(&oneWire);
         if (Controller::getPresent("StepperOnOffSwitchInputPin"))
-            //pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT); todo
-            Serial.println(" ==========executed pinMode(36, INPUT)");
-                pinMode(36, INPUT);
+            pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
         if (Controller::getI("MKSBoard")) {
             Serial.println("Using MKS DLC32 v2.1 board specific setup");
         } else {  // this is ALL needed for my custom PCB
@@ -160,11 +158,6 @@ class BackEnd {
             delay(20);
             ledcAttachPin(Controller::getI("HeaterPwmPin"), HEATER_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
             delay(20);
-            Serial.print("stepper desiredRPM:");
-            Serial.println(Controller::getI("Rpm"));
-            // motor
-            Serial.println("Initial disabling of the stepper in setup");
-            stopStepper();
             Serial.println("Initial disabling of the heater in setup");
             heater(false);
             Controller::setBool("currentHeaterOn", false);
@@ -180,18 +173,25 @@ class BackEnd {
         Serial.printf("maxHeaterDutyCycle %i as percentage\n", Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
-        if (Controller::getI("desiredTemperature") == 30) {
-            MyMusic::play(MyMusic::temp30);
-        } else if (Controller::getI("desiredTemperature") == 37) {
+        if (Controller::getI("desiredTemperature") <36) {
+            MyMusic::play(MyMusic::tempUnder37);
+        } else  {
             MyMusic::play(MyMusic::temp37);
         }
         delay(300);
-        startStepper();
         if (Controller::getPresent("TempSensorPin")) {
             getTemperature(temperature, humidity);
             startTemperature = temperature;
             Serial.println("startTemperature:" + String(startTemperature) + " startHumidity:" + String(humidity));
         }
+        // stepper
+        Serial.print("stepper desiredRPM:");
+        Serial.println(Controller::getI("Rpm"));
+        Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it
+        Serial.println("Initial disabling of the stepper in setup");
+        stopStepperIfNotStopped();  // just to init the multiplexing pins
+        delay(300);
+        processStepperStartOrStop();
         Serial.println("=================================END Backend Setup. Version:" + Controller::getS("version") + "================================");
     }
     /////////////
@@ -289,12 +289,12 @@ int calculateFrequency() {
     return freq;
 }
 
-void startStepper() {
-    Serial.println("Attempt to start the stepper");
+void startStepperIfNotStarted() {
     if (tempIsStepperOn) {
-        Serial.println("!!!! stepper already on");
+        //Serial.println("!!!! stepper already on");
         return;  // already on
     }
+    Serial.println("Attempt to start the stepper");
     if (Controller::getI("MKSBoard")) {
         Serial.println("START MKS stepper gradually");
         setupI2SOShiftEnableMotor();
@@ -314,6 +314,23 @@ void startStepper() {
     // Controller::setBool("StepperOn", 1);
     tempIsStepperOn = true;
 }
+void stopStepperIfNotStopped() {
+    if (!tempIsStepperOn) {
+        //Serial.println("!!!! stepper already off");
+        return;  // already on
+    }
+    Serial.println("STOP STEPPER");
+    if (Controller::getI("MKSBoard")) {
+        Serial.println("STOP MKS STEPPER");
+        setupI2SOShiftDisableMotor();
+    } else {
+        Serial.println("STOP PCB STEPPER");
+    }
+    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel to the GPIO Pin */
+    tempIsStepperOn = false;
+    delay(100);
+}
+
 //
 double rpmToHertz(float rpm) {
     return (int)(rpm / 60 * currentStepsPerRotation);  // in hertz
@@ -331,23 +348,6 @@ void initialSetupStepper(bool attemptToStopAnyway = false) {
     delay(200);
 }
 //
-void stopStepper() {
-    if (!tempIsStepperOn) {
-        Serial.println("!!!! stepper already off");
-        return;  // already on
-    }
-    Serial.println("STOP STEPPER");
-    if (Controller::getI("MKSBoard")) {
-        Serial.println("STOP MKS STEPPER");
-        setupI2SOShiftDisableMotor();
-    } else {
-        Serial.println("STOP PCB STEPPER");
-    }
-    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel to the GPIO Pin */
-    tempIsStepperOn = false;
-    delay(200);
-}
-
 int getTemperature(float& temp, float& humid) {
     // Serial.println("getTemperature called and pins..tempPin:" + String(Controller::getI("TempSensorPin")));
     if (Controller::getBool("UseOneWireForTemperature")) {
@@ -362,7 +362,7 @@ int getTemperature(float& temp, float& humid) {
         TempAndHumidity newValues = dhTempSensor.getTempAndHumidity();
         // Check if any reads failed and exit early (to try again).
         if (dhTempSensor.getStatus() != 0) {
-            //const char* bu[300];  // todo+ String(dhTempSensor.getStatusString())
+            // const char* bu[300];  // todo+ String(dhTempSensor.getStatusString())
             Controller::errorAlarm(" DHT12 error status, probably skipped on temp read");
             return false;
         }
@@ -513,27 +513,22 @@ void writeFile(fs::FS& fs, const char* path, const String& message) {
 // de-bounce variables
 const int DebounceTime = 200;
 unsigned long lastDebounceTime = 0;
-int lastSteadyState = LOW;// the previous steady state from the input pin
-int lastFlickerableState = -100;// the previous flicker-able state from the input pin
+int lastSteadyState = LOW;        // the previous steady state from the input pin
+int lastFlickerableState = -100;  // the previous flicker-able state from the input pin
 int lastStepperOnOffSwitchState;
-/** return -1 if unchanged and 0 for off and 1 for on*/
+/** returns 0 for off and 1 for on*/
 int readTurnOnStepperSwitch() {
     lastStepperOnOffSwitchState = !digitalRead(Controller::getI("StepperOnOffSwitchInputPin"));
-    //lastStepperOnOffSwitchState = !digitalRead(36); //todo
+    // lastStepperOnOffSwitchState = !digitalRead(36); //todo
     int ret = -1;  // means unchanged
-    // check to see if you just pressed the button
-    // (i.e. the input went from LOW to HIGH), and you've waited long enough
-    // since the last press to ignore any noise:
-    // If the switch/button changed, due to noise or pressing:
+    // check to see if you just pressed the button  // (i.e. the input went from LOW to HIGH), and you've waited long enough
+    // since the last press to ignore any noise:    // If the switch/button changed, due to noise or pressing:
     if (lastStepperOnOffSwitchState != lastFlickerableState) {
-        // reset the debouncing timer
-        lastDebounceTime = millis();
-        // save the the last flickerable state
-        lastFlickerableState = lastStepperOnOffSwitchState;
+        lastDebounceTime = millis();                         // reset the debouncing timer
+        lastFlickerableState = lastStepperOnOffSwitchState;  // save the the last flickerable state
     }
     if ((millis() - lastDebounceTime) > DebounceTime) {
-        // whatever the reading is at, it's been there for longer than the debounce
-        // delay, so take it as the actual current state:
+        // whatever the reading is at, it's been there for longer than the debounce        // delay, so take it as the actual current state:
         // if the button state has changed:
         if (lastSteadyState == HIGH && lastStepperOnOffSwitchState == LOW) {
             if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
@@ -549,6 +544,9 @@ int readTurnOnStepperSwitch() {
         }
         // save the the last steady state
         lastSteadyState = lastStepperOnOffSwitchState;
+    }
+    if (ret == -1) {
+        ret = lastSteadyState;
     }
     return ret;
 }
@@ -655,25 +653,25 @@ void createDir(fs::FS& fs, const char* path) {
 //
 void processStepperStartOrStop() {
     bool desired = Controller::getBool("StepperOn");
-    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {              // it's an end with the motor on signal so both the physical and soft on for motor to run
-        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();  //-1 for unchanged
-        if (stepperHardwareSwitchOnOffPosition != -1) {                      // todo revisit logic
-            Serial.println("Stepper switch toggled" + String(stepperHardwareSwitchOnOffPosition));
-            if (stepperHardwareSwitchOnOffPosition == 1 && !tempIsStepperOn && desired) {
-                startStepper();
-                if (Controller::getPresent("FanPin")) fan(false);
-            } else {  // hardware swich is off
-                if (stepperHardwareSwitchOnOffPosition == 0 && !tempIsStepperOn && !desired) {
-                    stopStepper();
-                    if (Controller::getPresent("FanPin")) fan(true);
-                }
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {  // it's an end with the motor on signal so both the physical and soft on for motor to run
+        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();
+        Serial.printf("stepperHardwareSwitchOnOffPosition:%d, tempIsStepperOn:%d,desired:%d\n", stepperHardwareSwitchOnOffPosition, tempIsStepperOn, desired);
+        if (stepperHardwareSwitchOnOffPosition && desired) {
+            startStepperIfNotStarted();
+            if (Controller::getPresent("FanPin")) fan(false);
+        } else {
+            stopStepperIfNotStopped();
+            if (Controller::getPresent("FanPin")) fan(true);
+        }
+    } else {             // NO SWITCH present
+        if (!desired) {  // viceversa so something changed
+            startStepperIfNotStarted();
+            if (Controller::getPresent("FanPin")) fan(false);
+        } else {
+            if (!desired) {
+                stopStepperIfNotStopped();
+                if (Controller::getPresent("FanPin")) fan(true);
             }
         }
-    } else if (!tempIsStepperOn && desired) {  // viceversa so something changed
-        startStepper();
-        if (Controller::getPresent("FanPin")) fan(false);
-    } else if (tempIsStepperOn && !desired) {
-        stopStepper();
-        if (Controller::getPresent("FanPin")) fan(true);
     }
 }

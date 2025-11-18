@@ -12,7 +12,9 @@ class Helper {
         fields.clear();
         // desired or set values AT this point for Tube rotator
         fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
-        fields.emplace_back(getNextIdStr(), "error", "error", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "info", "string", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);                   // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
@@ -77,62 +79,3 @@ class Helper {
         return buffer;
     }
 };
-// Just for doc from prev version for MKS
-// // for m17hs16-2004s1 https://www.omc-stepperonline.com/nema-17-bipolar-45ncm-64oz-in-2a-42x42x40mm-4-wires-w-1m-cable-connector-17hs16-2004s1 and Imax=2 AMp hold torque=Holding Torque: 45Ncm(64oz.in)
-// // and https://www.youtube.com/watch?v=BV-ouxhZamI
-// //   to measure on screw-driver=2*8*.068 about 1 volt but I'll go less maybe .9 volts
-// //
-// // good doc for pins at https://github.com/diruuu/FluidNC/blob/main/example_configs/MKS-DLC32-v2.0.yaml
-// enum {  // the number means IO pin heater=32 means heather is GPIO32
-//     HEATER_PIN = 32 /*this is internally connected to spindle*/,
-//     HEATER_PWM_CHANNEL = 0,
-//     STEPPER_PWM_STEP_PIN = 22 /*probe pin*/,
-//     STEPPER_PWM_CHANNEL = 2, /*NOT USED I2SO_BUZZ_PIN = 0000???,*/
-//     I2SO_DATA_PIN = 21,
-//     I2SO_CLOCK_PIN = 16,
-//     I2SO_LATCH_PIN = 17,
-//     LED_PIN = 2,
-//     POTENTIOMETER_PIN = 127,
-//     TEMP_SENSOR_PIN = 19 /* LCD_MISO*/,
-//     TURN_ON_STEPPER_PIN = 36 /*Sensor_VP SVP -*/,
-//     SPEAKER = 23,
-//     /*LCD_MOSI*/ SPEAKER_CHANNEL = 4,
-//     FAN_PIN = 33 /*LCD_RS*/,
-//     MEMORY_CS_PIN = 15,
-//     /*used internally by SD no need to declare*/ SD_D0_PIN = 12,
-//     SD_DI = 13,
-//     SD_CK = 14,
-//     SD_CS = 15,
-//     SD_DET = 39,
-//     SPINDLE_ENABLE_PIN = 27, /*internally connected*/
-// };
-
-// some potential probably for my custom pcb:
-//  desired or set values AT this point for Tube rotator
-// fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "desired Temperature");
-// fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "current Temperature", true);
-// fields.emplace_back(getNextIdStr(), "Rpm", "float ", "300", "current and desired RPM");
-// fields.emplace_back(getNextIdStr(), "currentHeatingEndDurationInMinutes", "int ", NOT_PRESENT, "desiredEndTime. Please enter an end time for end time alarm in minutes e 60 for 1 hour from start. You can separately reset the start time to now.", false);
-// // on offs
-// fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "36   ", "turns on off stepper");  //"1"
-// fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "turns on off fan if capability exists");
-// fields.emplace_back(getNextIdStr(), "HeaterOn", "bool", "1", "turns on off heater");
-// // pins
-// fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", NOT_PRESENT, "Heater Pwm Pin", false);
-// fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", String(25), "StepperPwmStepPin");
-// fields.emplace_back(getNextIdStr(), "StepperEnablePin", "uint8_t", String(26), "StepperEnablePin");
-// fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", NOT_PRESENT, "I2SoClockPin");
-// fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", NOT_PRESENT, "I2SoLatchPin");
-// fields.emplace_back(getNextIdStr(), "LedPwmPin", "uint8_t", String(2), "LedPwmPin");
-// fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
-// fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
-// fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", String(32), "SpeakerPin");  // or String(12)
-// fields.emplace_back(getNextIdStr(), "SpeakerChannel", "uint8_t", String(4), "SpeakerChannel");
-// fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");
-// fields.emplace_back(getNextIdStr(), "FanPwmChannel", "uint8_t", NOT_PRESENT, "FanPwmChannel");
-// fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
-// // misc
-// fields.emplace_back(getNextIdStr(), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");
-// fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "90", "maxHeaterDutyCycle");
-// fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "0", "MKSBoard");
-// fields.emplace_back(getNextIdStr(), "UseStepperOnOffSwitch", "bool", "0", "UseStepperOnOffSwitch");

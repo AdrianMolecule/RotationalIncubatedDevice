@@ -13,6 +13,10 @@ class MyMusic {
     static inline Melody frereJacquesFull = Melody("(cdec)x2   (efgr)x2  ((gagf)-ec)x2     (c g_ c+)x2");
     static inline Melody auClairDeLaLune = Melody("cccde+dr  ceddc+.r");
     static inline Melody darthVader = Melody(" (ggg e,-. b,-- | g e,-. b,-- g+ (ddde,-.)* b,--  | g, e,-. b,-- g+ | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. g,-- | b, g-. b,-- d*+  | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. b,-- | g e,-. b,-- g+ |)<<_ ");
+    static inline Melody wakeUp = Melody("(a)x1");
+    static inline Melody wifi = Melody("(b)x1");
+    static inline Melody backend = Melody("(c)x1");
+    static inline Melody backendend = Melody("(d)x1");
     static inline Melody tempUnder37 = Melody("(ab)x1");
     static inline Melody temp37 = Melody("(fg)x3");
     static inline Melody fatalErrorAlarmMusic = Melody("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);

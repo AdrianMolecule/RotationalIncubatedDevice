@@ -116,6 +116,7 @@ void spiffInit() {
 //
 void setup() {
     Serial.begin(115200);
+    MyMusic::play(MyMusic::wakeUp);
     Serial.println("[SYS] Booting...");
     WiFi.begin(getSsid(), getPass());
     Serial.printf("[WiFi] Connecting to %s ", getSsid());
@@ -129,19 +130,15 @@ void setup() {
     String wifiStatus;
     String when;
     if (WiFi.status() == WL_CONNECTED) {
-        wifiStatus = "[WiFi] Connected! IP: " + WiFi.localIP().toString();
+        MyMusic::play(MyMusic::wifi);
+        wifiStatus = "[WiFi] IP: " + WiFi.localIP().toString();
         Serial.println(wifiStatus);
         setupOTA();
-        // if (MDNS.begin("bio")) {
-        //     dns = "[mDNS] Registered as bio.local";
-        // } else {
-        //     dns = "[mDNS] Failed to start mDNS";
-        // }
-        // Serial.println(dns);
     } else {
         wifiStatus = "[WiFi] Connection failed!";
         Controller::fatalErrorAlarm(wifiStatus.c_str());
     }
+    Controller::status(wifiStatus + ", " + DNS);
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         if (line.startsWith("!")) {
@@ -162,7 +159,6 @@ void setup() {
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();
     Controller::set("bootTime", bootTime);
-    Controller::status(wifiStatus + ", started at:" + bootTime + ", " + DNS + ", ");
     Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
     Serial.println(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(true)); });

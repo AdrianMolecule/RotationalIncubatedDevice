@@ -43,6 +43,7 @@ void writeData(byte* bits);
 void processCommand();
 double rpmToHertz(float rpm);
 void setStepsPerRotation(int newStepsPerRotation);
+void stepperSetup();
 // end INCLUDES.h
 
 // temperature sensor stuff
@@ -75,7 +76,6 @@ uint8_t FAN_PWM_CHANNEL = 8;
 uint8_t LED_BLUE_PWM_CHANNEL = 10;
 // WeMos D1 esp8266: D8 as standard
 const int chipSelect = SS;
-int currentStepsPerRotation = 200;          // TODO unused
 unsigned long currentStartTime = millis();  // time since ESP power on in millis
 const int32_t SPIfreq = 40000;
 const int UNIVERSAL_PWM_RESOLUTION = 10;
@@ -90,6 +90,7 @@ enum Preference {  // for preferences
     TemperatureDisplay = true,
     TemperatureReached_MusicOn = true,
 };
+
 DHTesp dhTempSensor;          // used in setup and readTemperature
 OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
 DallasTemperature tempSensor = DallasTemperature();
@@ -100,21 +101,9 @@ class BackEnd {
 
     static void setupBackend() {
         Serial.println("setupBackend begin ~~~~~~~");
+        MyMusic::play(MyMusic::backend);
         tempSensor.setOneWire(&oneWire);
-        if (Controller::getPresent("StepperOnOffSwitchInputPin"))
-            pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
-        if (Controller::getI("MKSBoard")) {
-            Serial.println("Using MKS DLC32 v2.1 board specific setup");
-        } else {  // this is ALL needed for my custom PCB
-            if (Controller::getPresent("StepperOnOffSoftwareSwitchOutputPin")) {
-                pinMode(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), OUTPUT);
-                digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);
-            }
-            // pinMode(STEPPER_stepsPerRotation_M0, OUTPUT);
-            // pinMode(STEPPER_stepsPerRotation_M1, OUTPUT);
-            // pinMode(STEPPER_stepsPerRotation_M2, OUTPUT);
-            // setStepsPerRotation(currentStepsPerRotation);
-        }  // end just for the pcb
+        stepperSetup();
         //  Declare pins as output:
         pinMode(Controller::getI("LedPwmPin"), OUTPUT);
         ledcSetup(LED_BLUE_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
@@ -131,9 +120,11 @@ class BackEnd {
         // // alternate(LedPwmPin, 50, 5);
         // //   speaker
         ledcSetup(SPEAKER_CHANNEL, 5000, 8);
-        ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
-        ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
-        Controller::infoAlarm("speaker works");
+        if (Controller::getPresent("SpeakerPin")) {
+            ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
+            ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
+            Controller::infoAlarm("speaker present");
+        }
         // temperature sensor
         if (Controller::getPresent("TempSensorPin")) {
             if (!Controller::getI("UseOneWireForTemperature")) {
@@ -173,9 +164,9 @@ class BackEnd {
         Serial.printf("maxHeaterDutyCycle %i as percentage\n", Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
-        if (Controller::getI("desiredTemperature") <36) {
+        if (Controller::getI("desiredTemperature") < 36) {
             MyMusic::play(MyMusic::tempUnder37);
-        } else  {
+        } else {
             MyMusic::play(MyMusic::temp37);
         }
         delay(300);
@@ -189,9 +180,10 @@ class BackEnd {
         Serial.println(Controller::getI("Rpm"));
         Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it
         Serial.println("Initial disabling of the stepper in setup");
-        stopStepperIfNotStopped();  // just to init the multiplexing pins
-        delay(300);
-        processStepperStartOrStop();
+        // stopStepperIfNotStopped();  // just to init the multiplexing pins
+        // delay(300);
+        // processStepperStartOrStop();
+        MyMusic::play(MyMusic::backendend);
         Serial.println("=================================END Backend Setup. Version:" + Controller::getS("version") + "================================");
     }
     /////////////
@@ -205,6 +197,7 @@ class BackEnd {
             Serial.println("[SYS] loopBackend Started   -----------------------------------------");
             first = false;
         }
+        MyMusic::play(MyMusic::backendend);
         processStepperStartOrStop();
         // Get temperature
         float temperature;
@@ -285,21 +278,24 @@ class BackEnd {
 
 // loose functions
 int calculateFrequency() {
-    int freq = (int)(Controller::getI("Rpm") / 60 * currentStepsPerRotation);
+    int freq = (int)(Controller::getI("Rpm") / 60 * Controller::getI("stepsPerRotation"));
     return freq;
 }
 
 void startStepperIfNotStarted() {
     if (tempIsStepperOn) {
-        //Serial.println("!!!! stepper already on");
+        // Serial.println("!!!! stepper already on");
         return;  // already on
     }
     Serial.println("Attempt to start the stepper");
     if (Controller::getI("MKSBoard")) {
         Serial.println("START MKS stepper gradually");
         setupI2SOShiftEnableMotor();
+    } else {                                                                         // my board
+        digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // enable
     }
     for (int rpm = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpm <= Controller::getI("Rpm"); rpm += 10) {
+        if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
         double f = rpmToHertz(rpm);
         Serial.println("START STEPPER with frequency:" + String(f) + " and RPM:" + String(rpm));
         // delay(5);
@@ -316,40 +312,48 @@ void startStepperIfNotStarted() {
 }
 void stopStepperIfNotStopped() {
     if (!tempIsStepperOn) {
-        //Serial.println("!!!! stepper already off");
+        // Serial.println("!!!! stepper already off");
         return;  // already on
     }
     Serial.println("STOP STEPPER");
     if (Controller::getI("MKSBoard")) {
         Serial.println("STOP MKS STEPPER");
         setupI2SOShiftDisableMotor();
-    } else {
-        Serial.println("STOP PCB STEPPER");
+    } else {                                                                          // custom PCB
+        digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), HIGH);  // dis-engage break
+        delay(10);
     }
-    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel to the GPIO Pin */
+    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel from the GPIO Pin */
     tempIsStepperOn = false;
     delay(100);
 }
-
 //
 double rpmToHertz(float rpm) {
-    return (int)(rpm / 60 * currentStepsPerRotation);  // in hertz
+    return (int)(rpm / 60 * Controller::getI("stepsPerRotation"));  // in hertz
 }
 //
-void initialSetupStepper(bool attemptToStopAnyway = false) {
+void stepperSetup() {
     if (Controller::getI("MKSBoard")) {
-        Serial.println("initialSetupStepper STOP MKS STEPPER");
+        Serial.println("stepperSetup STOP MKS STEPPER");
         setupI2SOShiftDisableMotor();
     } else {
-        Serial.println("initialSetupStepper STOP PCB STEPPER");
+        Serial.println("stepperSetup STOP PCB STEPPER");
+        if (Controller::getPresent("StepperOnOffSoftwareSwitchOutputPin")) {
+            pinMode(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), OUTPUT);
+            digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // engage
+        }
+        pinMode(Controller::getI("StepperStepsPerRotationM0Pin"), OUTPUT);
+        pinMode(Controller::getI("StepperStepsPerRotationM1Pin"), OUTPUT);
+        pinMode(Controller::getI("StepperStepsPerRotationM2Pin"), OUTPUT);
+        setStepsPerRotation(Controller::getI("stepsPerRotation"));
     }
-    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel to the GPIO Pin */
+    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel from the GPIO Pin */
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
     tempIsStepperOn = false;
     delay(200);
 }
 //
 int getTemperature(float& temp, float& humid) {
-    // Serial.println("getTemperature called and pins..tempPin:" + String(Controller::getI("TempSensorPin")));
     if (Controller::getBool("UseOneWireForTemperature")) {
         tempSensor.requestTemperatures();
         // Serial.print("Temperature: ");  // print the temperature in Celsius
@@ -357,8 +361,7 @@ int getTemperature(float& temp, float& humid) {
         Serial.print("In getTemperature temp read is:");
         Serial.println(temp);
     } else {
-        // Reading temperature for humidity takes about 250 milliseconds!
-        // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
+        // Reading temperature for humidity takes about 250 milliseconds!. Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
         TempAndHumidity newValues = dhTempSensor.getTempAndHumidity();
         // Check if any reads failed and exit early (to try again).
         if (dhTempSensor.getStatus() != 0) {
@@ -663,8 +666,8 @@ void processStepperStartOrStop() {
             stopStepperIfNotStopped();
             if (Controller::getPresent("FanPin")) fan(true);
         }
-    } else {             // NO SWITCH present
-        if (!desired) {  // viceversa so something changed
+    } else {  // NO SWITCH present
+        if (desired) {
             startStepperIfNotStarted();
             if (Controller::getPresent("FanPin")) fan(false);
         } else {
@@ -673,5 +676,44 @@ void processStepperStartOrStop() {
                 if (Controller::getPresent("FanPin")) fan(true);
             }
         }
+    }
+}
+
+// sets the eectrical signals for the microswitches half of RPM in x2 stepsPerRotation and then full in no stepsPerRotation
+void setStepsPerRotation(int newStepsPerRotation) {
+    switch (newStepsPerRotation) {
+        case STEPS200:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS400:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS800:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS1600:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS3200:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), HIGH);
+            break;
+        case STEPS6400:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), HIGH);
+            break;
+        default:
+            Serial.println("BAD micro-stepping. Only 200,400,800,1600,3200,6400 allowed");
+            return;
     }
 }

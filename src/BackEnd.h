@@ -119,10 +119,10 @@ class BackEnd {
         // pinMode(Controller::getI("SpeakerPin"), OUTPUT);
         // // alternate(LedPwmPin, 50, 5);
         // //   speaker
-        ledcSetup(SPEAKER_CHANNEL, 5000, 8);
         if (Controller::getPresent("SpeakerPin")) {
+            ledcSetup(SPEAKER_CHANNEL, 5000, 8);
             ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
-            ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0
+            ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0 turns OFF
             Controller::infoAlarm("speaker present");
         }
         // temperature sensor
@@ -197,7 +197,6 @@ class BackEnd {
             Serial.println("[SYS] loopBackend Started   -----------------------------------------");
             first = false;
         }
-        MyMusic::play(MyMusic::backendend);
         processStepperStartOrStop();
         // Get temperature
         float temperature;

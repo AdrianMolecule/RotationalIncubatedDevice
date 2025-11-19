@@ -6,9 +6,10 @@
 const String NOT_PRESENT = String("255");
 
 class Helper {
-   public:
+    public:
     Helper() = default;
     static inline int idCounter = 0;
+    static const int initialSpeakerPin = 12;
     static void initialize(std::vector<Field>& fields) {
         fields.clear();
         // desired or set values AT this point for Tube rotator
@@ -20,8 +21,8 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
-        fields.emplace_back(getNextIdStr(), "Rpm", "float", "200", "desired RPM. You need to restart stepper to change this RPM.", false, true);
-        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "Desired microstepping, only 200,400 ... 6400");
+        fields.emplace_back(getNextIdStr(), "Rpm", "float", "100", "desired RPM. You need to restart stepper to change this RPM.", false, true);
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "6400", "Desired microstepping, only 200,400 ... 6400");
         fields.emplace_back(getNextIdStr(), "currentStepperOnOffSwitchPosition", "bool", "1", "Shows current StepperOnOffSwitch Position. Off means turn stepper Off. Ignored if no switch", true, true, false);
         fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
         fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);

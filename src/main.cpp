@@ -97,7 +97,7 @@ void spiffInit() {
     // Attempt to mount without formatting
     if (!SPIFFS.begin(false)) {
         Serial.println("E (1843) SPIFFS: mount failed, -10025: Trying to format...");
-        Controller::fatalErrorAlarm("[FS] Mount failed! Trying to reformat");  
+        Controller::fatalErrorAlarm("[FS] Mount failed! Trying to reformat");
         // Attempt to format and mount (this is the crucial step)
         if (!SPIFFS.begin(true)) {
             // If the format/mount also fails, this is a serious, unrecoverable error
@@ -116,6 +116,9 @@ void spiffInit() {
 //
 void setup() {
     Serial.begin(115200);
+    ledcSetup(SPEAKER_CHANNEL, 5000, 8);  // no need to declare pin as output
+    ledcAttachPin(Helper::initialSpeakerPin, SPEAKER_CHANNEL);
+    ledcWrite(SPEAKER_CHANNEL, 0);
     MyMusic::play(MyMusic::wakeUp);
     Serial.println("[SYS] Booting...");
     WiFi.begin(getSsid(), getPass());
@@ -128,7 +131,6 @@ void setup() {
     }
     Serial.println();
     String wifiStatus;
-    String when;
     if (WiFi.status() == WL_CONNECTED) {
         MyMusic::play(MyMusic::wifi);
         wifiStatus = "[WiFi] IP: " + WiFi.localIP().toString();
@@ -138,7 +140,7 @@ void setup() {
         wifiStatus = "[WiFi] Connection failed!";
         Controller::fatalErrorAlarm(wifiStatus.c_str());
     }
-    Controller::status(wifiStatus + ", " + DNS);
+    String when;
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         if (line.startsWith("!")) {
@@ -153,8 +155,9 @@ void setup() {
     spiffInit();
     bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
     if (!res) {
-        Controller::fatalErrorAlarm("[FS] Could not load the model so we initialized from code.");
+        Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
     }
+    Controller::status(wifiStatus + ", " + DNS);
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();

@@ -12,7 +12,7 @@
 #include "BackEnd.h"
 #include "Controller.h"
 #include "Field.h"
-#include "Helper.h"
+#include "Config.h"
 #include "HtmlHelper.h"
 #include "JsonWrapper.h"
 #include "Model.h"

@@ -1,4 +1,5 @@
 #include "HtmlHelper.h"
+
 #include "Controller.h"
 
 String HtmlHelper::generateMenu() {
@@ -93,11 +94,11 @@ String HtmlHelper::generateStatusPage(bool brief) {
             data.forEach(f => {
                 const el = document.querySelector("input[data-id='" + f.id + "']");
                 if (el && document.activeElement !== el) {
-                    if (el.type === "checkbox") {
-                        let shouldCheck = (f.value === "1" || f.value === "true");
-                        if (el.checked !== shouldCheck) el.checked = shouldCheck;
-                    } else {
-                        if (el.value !== f.value) el.value = f.value;
+                    if (el.value !== f.value) {
+                        el.value = f.value;
+                        el.style.transition = "background-color 0.8s";
+                        el.style.backgroundColor = "#fff3a0";
+                        setTimeout(() => { el.style.backgroundColor = ""; }, 800);
                     }
                 }
             });

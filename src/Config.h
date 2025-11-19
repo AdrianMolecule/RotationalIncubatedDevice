@@ -39,7 +39,7 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin");
         fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin");
         fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin");
-        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "23", "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing providing a GND (ground) connection.
+        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", String(initialSpeakerPin), "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing providing a GND (ground) connection.
         fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");   // 33 is probably available but Probably will not work with any decent size fan because it's too weak. 33 LCD-RS currently pin 8 of expansion 1. see schematics in root
         fields.emplace_back(getNextIdStr(), "LedPwmPin", "uint8_t", "2", "LedPwmPin");
         fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");

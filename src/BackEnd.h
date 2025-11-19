@@ -15,7 +15,7 @@
 #include <vector>
 //
 #include "Controller.h"
-#include "Helper.h"
+#include "Config.h"
 #include "Microstepping.h"
 #include "MyMusic.h"
 #include "TimeManager.h"

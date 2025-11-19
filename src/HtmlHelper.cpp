@@ -41,9 +41,25 @@ String HtmlHelper::generateStatusPage(bool brief) {
         html += "<tr>";
         html += "<td>" + f.getName() + "</td>";
         html += "<td>" + f.getType() + "</td>";
-        html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "'";
-        if (f.getReadOnly()) html += " disabled";
-        html += "></td>";
+        // VALUE CELL WITH TYPE-AWARE INPUT
+        html += "<td>";
+        String t = f.getType();
+        if (t == "bool") {
+            String checked = (f.getValue() == "1" || f.getValue() == "true") ? "checked" : "";
+            html += "<input type='checkbox' data-id='" + f.getId() + "' " + checked;
+            if (f.getReadOnly()) html += " disabled";
+            html += ">";
+        } else if (t == "int" || t == "float") {
+            html += "<input type='number' data-id='" + f.getId() + "' value='" + f.getValue() + "'";
+            if (f.getReadOnly()) html += " disabled";
+            html += ">";
+        } else {
+            html += "<input type='text' data-id='" + f.getId() + "' value='" + f.getValue() + "'";
+            if (f.getReadOnly()) html += " disabled";
+            html += ">";
+        }
+        html += "</td>";
+
         html += "<td>" + f.getDescription() + "</td>";
         html += "</tr>";
     }
@@ -59,7 +75,8 @@ String HtmlHelper::generateStatusPage(bool brief) {
         document.querySelectorAll("input[data-id]").forEach(el => {
             if (!el.dataset.listenerAttached) {
                 el.addEventListener("change", () => {
-                    ws.send(JSON.stringify({ action: "update", id: el.getAttribute("data-id"), value: el.value }));
+                    let v = (el.type === "checkbox") ? (el.checked ? "1" : "0") : el.value;
+                    ws.send(JSON.stringify({ action: "update", id: el.getAttribute("data-id"), value: v }));
                 });
                 el.dataset.listenerAttached = "true";
             }
@@ -76,11 +93,11 @@ String HtmlHelper::generateStatusPage(bool brief) {
             data.forEach(f => {
                 const el = document.querySelector("input[data-id='" + f.id + "']");
                 if (el && document.activeElement !== el) {
-                    if (el.value !== f.value) {
-                        el.value = f.value;
-                        el.style.transition = "background-color 0.8s";
-                        el.style.backgroundColor = "#fff3a0";
-                        setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                    if (el.type === "checkbox") {
+                        let shouldCheck = (f.value === "1" || f.value === "true");
+                        if (el.checked !== shouldCheck) el.checked = shouldCheck;
+                    } else {
+                        if (el.value !== f.value) el.value = f.value;
                     }
                 }
             });

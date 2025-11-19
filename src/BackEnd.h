@@ -197,6 +197,7 @@ class BackEnd {
             Serial.println("[SYS] loopBackend Started   -----------------------------------------");
             first = false;
         }
+        MyMusic::play(MyMusic::backendend);
         processStepperStartOrStop();
         // Get temperature
         float temperature;
@@ -255,7 +256,7 @@ class BackEnd {
                 }
             }
             if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
-                Controller::warningAlarm("Humidity dropped to less then the minimal humidit of 60% hardcoded value");
+                Controller::warningAlarm("Humidity dropped to less then the minimal humidity of 60% hardcoded value");
                 unsigned long nowTime = millis();
                 if (nowTime > lastHumidityAlertTime + 4000) {
                     lastHumidityAlertTime = nowTime;

@@ -1,0 +1,2511 @@
+Here is all the current code:
+at: 2025-11-18 20:06:37
+========================================
+
+--- FILE: BackEnd.h ---
+
+#pragma once
+#include <Arduino.h>
+
+#include "DHTesp.h"  //for DHT temp sensor
+// memory card https://www.mischianti.org/2021/03/28/how-to-use-sd-card-with-esp32-2/
+//  include the SD library:
+#include <DallasTemperature.h>
+#include <FS.h>
+#include <MyMusic.h>
+#include <OneWire.h>
+#include <SD.h>
+#include <SPI.h>
+
+#include <cstdio>  // Required for snprintf
+#include <vector>
+//
+#include "Controller.h"
+#include "Helper.h"
+#include "Microstepping.h"
+#include "MyMusic.h"
+#include "TimeManager.h"
+
+void startStepperIfNotStarted();
+void stopStepperIfNotStopped();
+void fanSetup();
+void fan(bool on);
+int readPotentiometer();
+void heater(bool on, float duty = 0);
+String getFormatedTimeSinceStart();
+void desiredEndTimeCheck();
+void setupI2SOShiftEnableMotor();
+void setupI2SOShiftDisableMotor();
+void createDir(fs::FS& fs, const char* path);
+void writeFile(fs::FS& fs, const char* path, const String& message);
+String formatTime(unsigned long time);
+String getFormatedTimeSinceStart();
+int readTurnOnStepperSwitch();
+void processStepperStartOrStop();
+void setupSDCard();
+void printDirectory(File dir, int numTabs);
+int getTemperature(float& temp, float& humid);
+void writeData(byte* bits);
+void processCommand();
+double rpmToHertz(float rpm);
+void setStepsPerRotation(int newStepsPerRotation);
+void stepperSetup();
+// end INCLUDES.h
+
+// temperature sensor stuff
+const float ModerateHeat_POWER = 0.9;
+// Temperature either dh or oneWireDallas
+// DHTesp dhTempSensor;  // used in setup and readTemperature
+// OneWire oneWire(Controller::getI("TempSensorPin"));  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
+// DallasTemperature tempSensor(&oneWire);
+//
+int lastTempHumidityReadTime = 0;         // never
+unsigned long lastHumidityAlertTime = 0;  // never
+float minHumidity = 60.;
+bool firstTimeTurnOnHeater = true;
+bool firstTimeReachDesiredTemperature = true;
+float maxTemperature = 0;
+// motor what we want for OS motor
+// https://github.com/nenovmy/arduino/blob/master/leds_disco/leds_disco.ino
+/* Setting all PWM motor, Heater PWM Properties */
+// fan
+const int FanFrequency = 40000;
+float startTemperature = 0;
+namespace Debug {
+const bool LOG_HEATER_ON_OFF_STATE = true;
+const bool LOG_FAN_ON_OFF_STATE = true;
+const bool LOG_STEPPER_ON_OFF_SWITCH_STATE = true;
+}  // namespace Debug
+uint8_t HEATER_PWM_CHANNEL = 0;
+uint8_t STEPPER_PWM_CHANNEL = 2;
+uint8_t FAN_PWM_CHANNEL = 8;
+uint8_t LED_BLUE_PWM_CHANNEL = 10;
+// WeMos D1 esp8266: D8 as standard
+const int chipSelect = SS;
+unsigned long currentStartTime = millis();  // time since ESP power on in millis
+const int32_t SPIfreq = 40000;
+const int UNIVERSAL_PWM_RESOLUTION = 10;
+const float UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 1);
+const float MODERATE_HEAT_POWER = 0.89;
+const float HALF_DUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
+//
+bool tempIsStepperOn = false;  // the first operation in setup is to stop it
+//
+enum Preference {  // for preferences
+    TimeDisplay = true,
+    TemperatureDisplay = true,
+    TemperatureReached_MusicOn = true,
+};
+
+DHTesp dhTempSensor;          // used in setup and readTemperature
+OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
+DallasTemperature tempSensor = DallasTemperature();
+
+class BackEnd {
+   public:
+    static inline unsigned long lastModelUpdateInSeconds = 0;
+
+    static void setupBackend() {
+        Serial.println("setupBackend begin ~~~~~~~");
+        MyMusic::play(MyMusic::backend);
+        tempSensor.setOneWire(&oneWire);
+        stepperSetup();
+        //  Declare pins as output:
+        pinMode(Controller::getI("LedPwmPin"), OUTPUT);
+        ledcSetup(LED_BLUE_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
+        delay(20);
+        ledcAttachPin(Controller::getI("LedPwmPin"), LED_BLUE_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
+        delay(20);
+        pinMode(Controller::getI("StepperPwmStepPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoClockPin"), OUTPUT);
+        pinMode(Controller::getI("I2SoDataPin"), OUTPUT);
+        // pinMode(Controller::getI("FanPin"), OUTPUT);
+        // // pinMode(Controller::getI("StepperEnablePin"), INPUT);
+        // pinMode(Controller::getI("SpeakerPin"), OUTPUT);
+        // // alternate(LedPwmPin, 50, 5);
+        // //   speaker
+        if (Controller::getPresent("SpeakerPin")) {
+            ledcSetup(SPEAKER_CHANNEL, 5000, 8);
+            ledcAttachPin(Controller::getI("SpeakerPin"), SPEAKER_CHANNEL);
+            ledcWrite(SPEAKER_CHANNEL, 0);  // duty Cycle = 0 turns OFF
+            Controller::infoAlarm("speaker present");
+        }
+        // temperature sensor
+        if (Controller::getPresent("TempSensorPin")) {
+            if (!Controller::getI("UseOneWireForTemperature")) {
+                dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
+                if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
+                    Controller::warningAlarm("DHTesp::ERROR_TIMEOUT");
+                    Serial.println("No DHT22 found or not working properly!");
+                }
+            } else {
+                oneWire.begin(Controller::getI("TempSensorPin"));
+                tempSensor.begin();
+            }
+            Serial.println("Temp sensor initiated");
+        } else {
+            Serial.println("No temperature sensor pin defined!");
+        }
+        // heater
+        if (Controller::getPresent("HeaterPwmPin")) {
+            pinMode(Controller::getI("HeaterPwmPin"), OUTPUT);
+            // setup the heater
+            ledcSetup(HEATER_PWM_CHANNEL, 40000, UNIVERSAL_PWM_RESOLUTION);  // normal PWM frrequency for MKS is 5000HZ
+            delay(20);
+            ledcAttachPin(Controller::getI("HeaterPwmPin"), HEATER_PWM_CHANNEL); /* Attach the Pin PWM Channel to the GPIO Pin */
+            delay(20);
+            Serial.println("Initial disabling of the heater in setup");
+            heater(false);
+            Controller::setBool("currentHeaterOn", false);
+        } else {
+            Controller::infoAlarm("No heater pin defined!");
+        }
+        if (Controller::getPresent("FanPin")) {
+            fanSetup();
+        } else {
+            Serial.println("No fan for this device");
+        }
+        // setupSDCard();
+        Serial.printf("maxHeaterDutyCycle %i as percentage\n", Controller::getI("maxHeaterDutyCycle"));
+        float temperature;
+        float humidity;
+        if (Controller::getI("desiredTemperature") < 36) {
+            MyMusic::play(MyMusic::tempUnder37);
+        } else {
+            MyMusic::play(MyMusic::temp37);
+        }
+        delay(300);
+        if (Controller::getPresent("TempSensorPin")) {
+            getTemperature(temperature, humidity);
+            startTemperature = temperature;
+            Serial.println("startTemperature:" + String(startTemperature) + " startHumidity:" + String(humidity));
+        }
+        // stepper
+        Serial.print("stepper desiredRPM:");
+        Serial.println(Controller::getI("Rpm"));
+        Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it
+        Serial.println("Initial disabling of the stepper in setup");
+        // stopStepperIfNotStopped();  // just to init the multiplexing pins
+        // delay(300);
+        // processStepperStartOrStop();
+        MyMusic::play(MyMusic::backendend);
+        Serial.println("=================================END Backend Setup. Version:" + Controller::getS("version") + "================================");
+    }
+    /////////////
+    static inline bool first = true;
+    static inline float lastReadTemp = -1;
+    static inline bool TEMPERATURE_DISPLAY = true;
+    static inline bool TIME_DISPLAY = true;
+    //////
+    static void loopBackend() {
+        if (first) {
+            Serial.println("[SYS] loopBackend Started   -----------------------------------------");
+            first = false;
+        }
+        processStepperStartOrStop();
+        // Get temperature
+        float temperature;
+        float humidity;
+        char tempCharBuffer[16];  // reused// A size of 16 is often safe for most floats.
+        float dT = Controller::getI("desiredTemperature");
+        int ledBlueDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 10 : UNIVERSAL_MAX_DUTY_CYCLE;
+        ledcWrite(LED_BLUE_PWM_CHANNEL, ledBlueDuty);              // BLUE LED start
+        if (((millis() - lastTempHumidityReadTime) / 2000) > 1) {  // every 2 seconds
+            getTemperature(temperature, humidity);
+            if (lastReadTemp != temperature) {  // avoid setting values that did not change
+                std::snprintf(tempCharBuffer, sizeof(tempCharBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
+                Controller::set("currentTemperature", tempCharBuffer);
+                // Controller::webSocket.textAll(Controller::model.toJsonString());//immediate UI update
+                lastReadTemp = temperature;
+            }
+            lastTempHumidityReadTime = millis();
+            if (temperature > maxTemperature) {  // todo
+                maxTemperature = temperature;
+            }
+            if (TEMPERATURE_DISPLAY) {
+                Serial.printf(" Current temp: %.2f, %s", temperature, !Controller::getBool("UseOneWireForTemperature") ? Serial.printf("Humidity:%.2f ,", humidity), "" : "");
+                Serial.printf("DesiredTemperature:%.2f max temperature: %.2f\n", dT, maxTemperature);
+                // if (TIME_DISPLAY) {
+                //     Serial.println(" Time since start: " + getFormatedTimeSinceStart() + " ");
+                // } else {
+                //     Serial.println(" ");
+                // }
+            }
+            if (temperature < dT) {  // todo update the heater on off  faster
+                if (!Controller::getBool("currentHeaterOn")) {
+                    Serial.println("Turning heater ON");
+                    if (firstTimeTurnOnHeater) {
+                        Controller::infoAlarm("First time heater ON");
+                        firstTimeTurnOnHeater = false;
+                    }
+                    if (dT - temperature >= 2) {                                                                // high temp difference
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
+                    } else {
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                    }
+                }
+                // else{
+                //  do nothing let it heat
+                // }
+            } else {  // temp is high enough no need to heat
+                if (Controller::getBool("currentHeaterOn")) {
+                    if (firstTimeReachDesiredTemperature) {
+                        if (Controller::getBool("TemperatureReachedMusicOn")) {
+                            Controller::infoAlarm("firstTimeReachDesiredTemperature");
+                        }
+                        firstTimeReachDesiredTemperature = false;
+                    }
+                    heater(false);  // second arg is ignored when heater is turned off
+                    Controller::setBool("currentHeaterOn", false);
+                }
+            }
+            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+                Controller::warningAlarm("Humidity dropped to less then the minimal humidity of 60% hardcoded value");
+                unsigned long nowTime = millis();
+                if (nowTime > lastHumidityAlertTime + 4000) {
+                    lastHumidityAlertTime = nowTime;
+                    MyMusic::play(MyMusic::invalidChoice);
+                }
+            }
+            Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
+            int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
+            if (r == 1) {  // 0 means not yet, -1 means not set or errors
+                Controller::infoAlarm("HeatingDateTimeWasReached reached");
+                if (Controller::getS("alarmTurnsHeatingOff")) {
+                    heater(false);
+                }
+            }
+        }
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    }
+};
+
+// loose functions
+int calculateFrequency() {
+    int freq = (int)(Controller::getI("Rpm") / 60 * Controller::getI("stepsPerRotation"));
+    return freq;
+}
+
+void startStepperIfNotStarted() {
+    if (tempIsStepperOn) {
+        // Serial.println("!!!! stepper already on");
+        return;  // already on
+    }
+    Serial.println("Attempt to start the stepper");
+    if (Controller::getI("MKSBoard")) {
+        Serial.println("START MKS stepper gradually");
+        setupI2SOShiftEnableMotor();
+    } else {                                                                         // my board
+        digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // enable
+    }
+    for (int rpm = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpm <= Controller::getI("Rpm"); rpm += 10) {
+        if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
+        double f = rpmToHertz(rpm);
+        Serial.println("START STEPPER with frequency:" + String(f) + " and RPM:" + String(rpm));
+        // delay(5);
+        ledcSetup(STEPPER_PWM_CHANNEL, f, UNIVERSAL_PWM_RESOLUTION);
+        // delay(5);
+        ledcAttachPin(Controller::getI("StepperPwmStepPin"), STEPPER_PWM_CHANNEL); /* Attach the StepPin PWM Channel to the GPIO Pin */
+        // delay(5);
+        ledcWrite(STEPPER_PWM_CHANNEL, HALF_DUTY_CYCLE);
+        delay(500);
+        // Controller::setBool("StepperOn", true);
+    }
+    // Controller::setBool("StepperOn", 1);
+    tempIsStepperOn = true;
+}
+void stopStepperIfNotStopped() {
+    if (!tempIsStepperOn) {
+        // Serial.println("!!!! stepper already off");
+        return;  // already on
+    }
+    Serial.println("STOP STEPPER");
+    if (Controller::getI("MKSBoard")) {
+        Serial.println("STOP MKS STEPPER");
+        setupI2SOShiftDisableMotor();
+    } else {                                                                          // custom PCB
+        digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), HIGH);  // dis-engage break
+        delay(10);
+    }
+    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel from the GPIO Pin */
+    tempIsStepperOn = false;
+    delay(100);
+}
+//
+double rpmToHertz(float rpm) {
+    return (int)(rpm / 60 * Controller::getI("stepsPerRotation"));  // in hertz
+}
+//
+void stepperSetup() {
+    if (Controller::getI("MKSBoard")) {
+        Serial.println("stepperSetup STOP MKS STEPPER");
+        setupI2SOShiftDisableMotor();
+    } else {
+        Serial.println("stepperSetup STOP PCB STEPPER");
+        if (Controller::getPresent("StepperOnOffSoftwareSwitchOutputPin")) {
+            pinMode(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), OUTPUT);
+            digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // engage
+        }
+        pinMode(Controller::getI("StepperStepsPerRotationM0Pin"), OUTPUT);
+        pinMode(Controller::getI("StepperStepsPerRotationM1Pin"), OUTPUT);
+        pinMode(Controller::getI("StepperStepsPerRotationM2Pin"), OUTPUT);
+        setStepsPerRotation(Controller::getI("stepsPerRotation"));
+    }
+    ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel from the GPIO Pin */
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) pinMode(Controller::getI("StepperOnOffSwitchInputPin"), INPUT);
+    tempIsStepperOn = false;
+    delay(200);
+}
+//
+int getTemperature(float& temp, float& humid) {
+    if (Controller::getBool("UseOneWireForTemperature")) {
+        tempSensor.requestTemperatures();
+        // Serial.print("Temperature: ");  // print the temperature in Celsius
+        temp = tempSensor.getTempCByIndex(0);
+        Serial.print("In getTemperature temp read is:");
+        Serial.println(temp);
+    } else {
+        // Reading temperature for humidity takes about 250 milliseconds!. Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
+        TempAndHumidity newValues = dhTempSensor.getTempAndHumidity();
+        // Check if any reads failed and exit early (to try again).
+        if (dhTempSensor.getStatus() != 0) {
+            // const char* bu[300];  // todo+ String(dhTempSensor.getStatusString())
+            Controller::errorAlarm(" DHT12 error status, probably skipped on temp read");
+            return false;
+        }
+        temp = newValues.temperature;
+        if (temp < 0 || temp > 70) {
+            for (int i = 0; i < 10; i++) {
+                Controller::errorAlarm("temperature out of range 0-70");
+            }
+        }
+        humid = newValues.humidity;
+    }
+    return true;
+}
+
+// current https://reprap.org/wiki/NEMA_17_Stepper_motor 17hs16 20044s1(black ones) rated for 2 A
+// adjustment guide https://lastminuteengineers.com/drv8825-stepper-motor-driver-arduino-tutorial/ Vref on Pot = max current /2 =1V
+// this is probably the multiplexing of output pins
+// xDir is 2 xStep is 1 and beeper is 7
+// it seems to me that the signal from Probe is sent to the Controller::getI("StepperPwmStepPin") but for enable we might? use the multiplexor
+void setupI2SOShiftEnableMotor() {
+    // Serial.println("#################### setupI2SOShift   EnableMotor #####################################");
+    byte bits[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};  // enable is pin 0 and should be 0 to start stepper, last  is beeper
+    writeData(bits);
+    delay(100);
+}
+//
+void setupI2SOShiftDisableMotor() {
+    // Serial.println("#################### setupI2SOShift    DisableMotor #####################################");
+    byte bits[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0};  // enable is pin 0 and should be high to stop stepper, last one is the beeper
+    writeData(bits);
+    delay(10);
+}
+//
+void writeData(byte* bits) {
+    // alternate data we can just capture the 2 data values like 2254, 2124
+    int data1 = 0;
+    for (int i = 0; i < 8; i++) {
+        data1 |= bits[i + 8] << i;
+    }
+    int data2 = 0;
+    for (int i = 0; i < 8; i++) {
+        data2 |= bits[i] << i;
+    }
+    // disable update
+    digitalWrite(Controller::getI("I2SoLatchPin"), LOW);
+    // shift out the data (second shift register must be send first)
+    shiftOut(Controller::getI("I2SoDataPin"), Controller::getI("I2SoClockPin"), MSBFIRST, data1);  // NOT NEEDED FOR X axes
+                                                                                                   // Serial.print("data2");Serial.println(data2);
+    shiftOut(Controller::getI("I2SoDataPin"), Controller::getI("I2SoClockPin"), MSBFIRST, data2);  //*
+                                                                                                   // update the shift register output pins
+    digitalWrite(Controller::getI("I2SoLatchPin"), HIGH);
+}
+
+// Function for reading the Potentiometer
+int readPotentiometer() {
+    uint16_t customDelay = analogRead(Controller::getI("PotentiometerPin"));  // Reads the potentiometer
+    int newRPM = map(customDelay, 0, 1023, 0, 300);                           // read values of the potentiometer from 0 to 1023 into  d0->300
+    return 300;
+}
+
+void setupSDCard() {
+    Serial.print("\nInitializing SD card...");
+    SPIClass hspi = SPIClass(HSPI);                                             // HSPI has the 12-15 pins already configured // actually a reference
+    if (!SD.begin(Controller::getI("MemoryCsPin"), hspi, SPIfreq, "/sd", 2)) {  // copied from Fluid SDCard.cpp //if (SD.begin(csPin, SPI, SPIfreq, "/sd", 2)) {
+        Serial.println("initialization failed. Things to check:");
+        Serial.println("* is a card inserted?");
+        while (1);
+    } else {
+        Serial.println("A card is present.");
+    }
+    // print the type of card
+    Serial.println();
+    Serial.print("Card type:    ");
+    switch (SD.cardType()) {
+        case CARD_NONE:
+            Serial.println("NONE");
+            break;
+        case CARD_MMC:
+            Serial.println("MMC");
+            break;
+        case CARD_SD:
+            Serial.println("SD");
+            break;
+        case CARD_SDHC:
+            Serial.println("SDHC");  // for me it prints this!
+            break;
+        default:
+            Serial.println("Unknown");
+    }
+    // print the type and size of the first FAT-type volume
+    //  uint32_t volume size;
+    //  Serial.print("Volume type is:    FAT");
+    //  Serial.println(SDFS.usefatType(), DEC);
+    Serial.print("Card size:  ");
+    Serial.println((float)SD.cardSize() / 1000);
+    Serial.print("Total bytes: ");
+    Serial.println(SD.totalBytes());
+    Serial.print("Used bytes: ");
+    Serial.println(SD.usedBytes());
+    File dir = SD.open("/", FILE_READ);
+    createDir(SD, "/adriandir");
+    printDirectory(dir, 0);
+    writeFile(SD, "/lastWrittenTime.txt", formatTime(millis()));
+    writeFile(SD, "/hello.txt", "  Hello");
+    Serial.println("after writeFile and adrianDir subdirectory ListDir");
+}
+//
+void printDirectory(File dir, int numTabs) {
+    while (true) {
+        File entry = dir.openNextFile();
+        if (!entry) {  // no more files
+            break;
+        }
+        for (uint8_t i = 0; i < numTabs; i++) {
+            Serial.print('\t');
+        }
+        Serial.print(entry.name());
+        if (entry.isDirectory()) {
+            Serial.println("/");
+            printDirectory(entry, numTabs + 1);
+        } else {
+            // files have sizes, directories do not
+            Serial.print("\t\t");
+            Serial.print(entry.size(), DEC);
+            time_t lw = entry.getLastWrite();
+            struct tm* tmstruct = localtime(&lw);
+            Serial.printf("\tLAST WRITE: %d-%02d-%02d %02d:%02d:%02d\n", (tmstruct->tm_year) + 1900, (tmstruct->tm_mon) + 1, tmstruct->tm_mday, tmstruct->tm_hour, tmstruct->tm_min, tmstruct->tm_sec);
+        }
+        entry.close();
+    }
+}
+
+void writeFile(fs::FS& fs, const char* path, const String& message) {
+    Serial.printf("Writing file: %s\n", path);
+    File file = fs.open(path, FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+    if (file.print(message)) {
+        Serial.println("File written");
+    } else {
+        Serial.println("Write failed");
+    }
+    file.close();
+}
+//
+// de-bounce variables
+const int DebounceTime = 200;
+unsigned long lastDebounceTime = 0;
+int lastSteadyState = LOW;        // the previous steady state from the input pin
+int lastFlickerableState = -100;  // the previous flicker-able state from the input pin
+int lastStepperOnOffSwitchState;
+/** returns 0 for off and 1 for on*/
+int readTurnOnStepperSwitch() {
+    lastStepperOnOffSwitchState = !digitalRead(Controller::getI("StepperOnOffSwitchInputPin"));
+    // lastStepperOnOffSwitchState = !digitalRead(36); //todo
+    int ret = -1;  // means unchanged
+    // check to see if you just pressed the button  // (i.e. the input went from LOW to HIGH), and you've waited long enough
+    // since the last press to ignore any noise:    // If the switch/button changed, due to noise or pressing:
+    if (lastStepperOnOffSwitchState != lastFlickerableState) {
+        lastDebounceTime = millis();                         // reset the debouncing timer
+        lastFlickerableState = lastStepperOnOffSwitchState;  // save the the last flickerable state
+    }
+    if ((millis() - lastDebounceTime) > DebounceTime) {
+        // whatever the reading is at, it's been there for longer than the debounce        // delay, so take it as the actual current state:
+        // if the button state has changed:
+        if (lastSteadyState == HIGH && lastStepperOnOffSwitchState == LOW) {
+            if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
+                Controller::infoAlarm("The stepper motor switch was turned off");
+            }
+            ret = 0;
+        } else if (lastSteadyState == LOW && lastStepperOnOffSwitchState == HIGH) {
+            if (Debug::LOG_STEPPER_ON_OFF_SWITCH_STATE) {
+                Serial.println("The stepper motor switch was turned on");
+                Controller::infoAlarm("The stepper motor switch was turned on");
+            }
+            ret = 1;
+        }
+        // save the the last steady state
+        lastSteadyState = lastStepperOnOffSwitchState;
+    }
+    if (ret == -1) {
+        ret = lastSteadyState;
+    }
+    return ret;
+}
+//
+// String getFormatedTimeSinceStart() {
+//     unsigned long time = (unsigned long)((millis() - currentStartTime) / 1000);  // finds the time since last print in secs
+//     return formatTime(time);
+// }
+//
+void fanSetup() {
+    pinMode(Controller::getI("FanPin"), OUTPUT);
+    fan(true);
+    Serial.print("Fan pin ");
+    Serial.print(Controller::getI("FanPin"));
+    Serial.print(" on channel ");
+    Serial.print(FAN_PWM_CHANNEL);
+    Serial.print(" at frequency ");
+    Serial.print(FanFrequency);
+    delay(2000);
+    fan(false);
+}
+//
+void fan(bool on) {
+    if (Controller::getI("FanOn") != on) {
+        Controller::setBool("FanOn", on);
+    }
+    if (on) {
+        ledcAttachPin(Controller::getI("FanPin"), FAN_PWM_CHANNEL);
+        ledcWrite(FAN_PWM_CHANNEL, (int)UNIVERSAL_MAX_DUTY_CYCLE);
+    } else {
+        ledcDetachPin(Controller::getI("FanPin"));
+        ledcWrite(FAN_PWM_CHANNEL, 0);
+    }
+    if (Debug::LOG_FAN_ON_OFF_STATE) {
+        Serial.print("Fan set to: ");
+        Serial.println(on);
+    }
+}
+
+void heater(bool on, float duty) {
+    // this works only after setup was called to initialize the channel
+    if (on) {
+        ledcWrite(HEATER_PWM_CHANNEL, duty);  // Heater start
+        if (!Controller::getBool("currentHeaterOn"))
+            Controller::setBool("currentHeaterOn", true);
+    } else {
+        ledcWrite(HEATER_PWM_CHANNEL, 0);  // Heater stop
+        if (Controller::getBool("currentHeaterOn"))
+            Controller::setBool("currentHeaterOn", false);
+    }
+    if (Debug::LOG_HEATER_ON_OFF_STATE) {
+        Serial.print("Heater set to: ");
+        Serial.print(on);
+        if (on) {
+            Serial.print(" with duty at:");
+            Serial.print((duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100);
+            Serial.print("%");
+        }
+        Serial.println();
+    }
+}
+
+/** time is in seconds */
+String formatTime(unsigned long time) {
+    String result = "";
+    int hours = (unsigned long)(time / 3600);
+    if (hours > 0) {
+        result = +hours;
+        result += ("h ");
+    }
+    result += ((unsigned long)(time % 3600) / 60);
+    result += ("m ");
+    result += (time % 60);
+    result += ("s");
+    return result;
+}
+//
+
+//
+//
+// void desiredEndTimeCheck() {  // returns time to alarm
+//     int det = Controller::getI("desiredHeatingEndDurationInMinutes");
+//     if (det == -1) {
+//         return;
+//     }
+//     unsigned int elapsedTimeInMilliSecs = (millis() - currentStartTime);
+//     unsigned int timeToAlarmInSec = det * 60 - (unsigned long)(elapsedTimeInMilliSecs / 1000);
+//     Controller::set("timeToAlarmInSec", String(timeToAlarmInSec));
+//     if (det != -1 && det * 60 * 1000 <= elapsedTimeInMilliSecs) {
+//         Serial.println("Desired end time " + String(det) + " reached. Current elapsed time: " + getFormatedTimeSinceStart());
+//         MyMusic::play(scaleLouder, true);
+//     }
+// }
+
+//
+void createDir(fs::FS& fs, const char* path) {
+    Serial.printf("Creating Dir: %s\n", path);
+    if (fs.mkdir(path)) {
+        Serial.println("Dir created");
+    } else {
+        Serial.println("mkdir failed");
+    }
+}
+//
+void processStepperStartOrStop() {
+    bool desired = Controller::getBool("StepperOn");
+    if (Controller::getPresent("StepperOnOffSwitchInputPin")) {  // it's an end with the motor on signal so both the physical and soft on for motor to run
+        int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();
+        Serial.printf("stepperHardwareSwitchOnOffPosition:%d, tempIsStepperOn:%d,desired:%d\n", stepperHardwareSwitchOnOffPosition, tempIsStepperOn, desired);
+        if (stepperHardwareSwitchOnOffPosition && desired) {
+            startStepperIfNotStarted();
+            if (Controller::getPresent("FanPin")) fan(false);
+        } else {
+            stopStepperIfNotStopped();
+            if (Controller::getPresent("FanPin")) fan(true);
+        }
+    } else {  // NO SWITCH present
+        if (desired) {
+            startStepperIfNotStarted();
+            if (Controller::getPresent("FanPin")) fan(false);
+        } else {
+            if (!desired) {
+                stopStepperIfNotStopped();
+                if (Controller::getPresent("FanPin")) fan(true);
+            }
+        }
+    }
+}
+
+// sets the eectrical signals for the microswitches half of RPM in x2 stepsPerRotation and then full in no stepsPerRotation
+void setStepsPerRotation(int newStepsPerRotation) {
+    switch (newStepsPerRotation) {
+        case STEPS200:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS400:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS800:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS1600:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), LOW);
+            break;
+        case STEPS3200:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), LOW);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), HIGH);
+            break;
+        case STEPS6400:
+            digitalWrite(Controller::getI("StepperStepsPerRotationM0Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM1Pin"), HIGH);
+            digitalWrite(Controller::getI("StepperStepsPerRotationM2Pin"), HIGH);
+            break;
+        default:
+            Serial.println("BAD micro-stepping. Only 200,400,800,1600,3200,6400 allowed");
+            return;
+    }
+}
+
+
+--- FILE: Controller.h ---
+
+#pragma once
+#include <ESPAsyncWebServer.h>
+
+#include "Field.h"
+#include "Model.h"
+
+class Controller {
+   public:
+    inline static Model model = Model{};
+
+    inline static AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};  // Declare the variable here (doesn't allocate memory yet)
+
+    static int getI(String name) {
+        // Serial.println("Controller::getI called for the name "+name);
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!Controller::getI did not find an entry for the name[" + name + "]").c_str());
+            return -1;
+        }
+        return f->getValue().toInt();
+    }
+    //
+    static bool getPresent(String name) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Serial.println("Controller::getPresent called for the name " + name);
+            Controller::fatalErrorAlarm(("!!!!!Controller::getPresent did not find an entry for the name[" + name + "]").c_str());
+            return false;
+        }
+        // Serial.println("!!!!!Controller::getPresent found value:" + model.getByName(name)->getValue());
+        else
+            return !(f->getValue() == NOT_PRESENT);
+    }
+    //
+    static bool getBool(String name) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!!!!!!!!!!!!!!Controller::getBool did not find an entry for the name[" + name + "]").c_str());
+            return false;
+        } else
+            return f->getValue().compareTo("0");
+    }
+    //
+    static String getS(String name) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!Controller::getS did not find an entry for the name[" + name + "]").c_str());
+            return "NOT FOUND";
+        } else
+            return f->getValue();
+    }
+    //
+    static void set(String name, String value) {
+        Serial.println("Controller::setI called for the name " + name + " with value:" + value);
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!Controller::set did not find an entry for the name[" + name + "]").c_str());
+        } else
+            f->setValue(value);
+    }
+    //
+    static void setNoLog(String name, String value) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!Controller::set did not find an entry for the name[" + name + "]").c_str());
+        } else
+            f->setValueQuiet(value);
+    }
+    //
+    static void setBool(String name, bool value) {
+        const auto f = Controller::model.getByName(name);
+        if (f == nullptr) {
+            Controller::fatalErrorAlarm(("!!!!!Controller::setBool did not find an entry for the name[" + name + "]").c_str());
+        } else
+            f->setValue(value ? "1" : "0");
+    }
+    //
+    static void status(String msg) {
+        Controller::set("status", Controller::getS("status") + "; " + msg);
+    }
+    //
+
+    static void fatalErrorAlarm(const char* message) {
+        Serial.print("Fatal Error Alarm: ");
+        Serial.println(message);
+        MyMusic::play(MyMusic::fatalErrorAlarmMusic);
+        Controller::error(message);
+    }
+    //
+    static void errorAlarm(const char* message) {
+        Serial.print("Fatal Error Alarm: ");
+        Serial.println(message);
+        MyMusic::play(MyMusic::errorAlarmMusic);
+        Controller::error(message);
+    }
+
+    static void warningAlarm(const char* message) {
+        Serial.print("Warning Alarm: ");
+        Serial.println(message);
+        MyMusic::play(MyMusic::warningAlarmMusic);
+        Controller::warning(message);
+    }
+
+    static void infoAlarm(const char* message) {
+        Serial.print("Info Alarm: ");
+        Serial.println(message);
+        MyMusic::play(MyMusic::infoAlarmMusic);
+        Controller::info(message);
+    }
+
+   private:
+    static void error(const char* msg) {
+        Serial.println("Error " + String(msg));
+        const auto f = Controller::model.getByName("error");
+        if (f == nullptr) {
+            Serial.println("!!!! We cannot set the controller error because field \"error\" does not exist in the current model");
+        } else {
+            if (Controller::getS("error").length() < 400) {
+                Controller::set("error", Controller::getS("error") + "; " + msg);
+            } else if (Controller::getS("error").length() < 450) {
+                Controller::set("error", Controller::getS("error") + "; ...");
+            }
+        }
+    }
+    //
+    static void warning(const char* msg) {
+        Serial.println("warning " + String(msg));
+        const auto f = Controller::model.getByName("warning");
+        if (f == nullptr) {
+            Serial.println("!!!!! We cannot set the controller warning because field \"warning\" does not exist in the current model");
+        } else {
+            if (Controller::getS("warning").length() < 400) {
+                Controller::set("warning", Controller::getS("warning") + "; " + msg);
+            } else if (Controller::getS("warning").length() < 450) {
+                Controller::set("warning", Controller::getS("warning") + "; ...");
+            }
+        }
+    }
+    //
+    static void info(const char* msg) {
+        Serial.println("info " + String(msg));
+        const auto f = Controller::model.getByName("info");
+        if (f == nullptr) {
+            Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");
+        } else {
+            if (Controller::getS("info").length() < 400) {
+                Controller::set("info", Controller::getS("info") + "; " + msg);
+            } else if (Controller::getS("info").length() < 450) {
+                Controller::set("info", Controller::getS("info") + "; ...");
+            }
+        }
+    }
+};
+
+--- FILE: Field.h ---
+
+#pragma once
+#include <Arduino.h>
+#include <ArduinoJson.h>
+
+class Field {
+   private:
+    String id;//todo change to int or some smaller type
+    String name;
+    String type;
+    String value;
+    String description;
+    bool readOnly;
+    bool isShown;
+    bool isPersisted;
+
+   public:
+    Field() = default;
+    Field(const String& id, const String& name, const String& type = "string",
+          const String& value = "0", const String& description = "default description",
+          bool readOnly = false, bool isShown = false, bool isPersisted = true) {
+        this->id = id;
+        this->name = name;
+        this->type = type;
+        this->value = value;
+        this->description = description;
+        this->readOnly = readOnly;
+        this->isShown = isShown;
+        this->isPersisted = isPersisted;
+    }
+
+    void fromJson(const JsonObject& obj) {
+        id = obj["id"] | "";
+        name = obj["name"] | "";
+        type = obj["type"] | "";
+        value = obj["value"] | "";
+        description = obj["description"] | "";
+        readOnly = obj["readOnly"] | false;
+        isShown = obj["isShown"] | false;
+        isPersisted = obj["isPersisted"] | true;
+    }
+
+    void toJson(JsonObject& obj) const {
+        obj["id"] = id;
+        obj["name"] = name;
+        obj["type"] = type;
+        obj["value"] = value;
+        obj["description"] = description;
+        obj["readOnly"] = readOnly;
+        obj["isShown"] = isShown;
+        obj["isPersisted"] = isPersisted;
+    }
+
+    const String getId() const { return id; }
+    const String getName() const { return name; }
+    const String getType() const { return type; }
+    const String getValue() const { return value; }
+    bool getReadOnly() const { return readOnly; }
+    const String getDescription() const { return description; }
+    bool getIsShown() const { return isShown; }
+    bool getIsPersisted() const { return isPersisted; }
+
+    void setId(const String& val) {
+        Serial.printf("[Field] setId: %s -> %s\n", id.c_str(), val.c_str());
+        id = val;
+    }
+    void setName(const String& val) {
+        Serial.printf("[Field] setName: %s -> %s\n", name.c_str(), val.c_str());
+        name = val;
+    }
+    void setType(const String& val) {
+        Serial.printf("[Field] setType: %s -> %s\n", type.c_str(), val.c_str());
+        type = val;
+    }
+    // Setters with logging
+    void setValue(const String& val) {
+        Serial.printf("[Field] %s setValue: %s -> %s\n", name.c_str(), value.c_str(), val.c_str());
+        value = val;
+    }
+    void setValueQuiet(const String& val) {
+        value = val;
+    }
+    void setDescription(const String& val) {
+        Serial.printf("[Field] %s setDescription: %s -> %s\n", name.c_str(), description.c_str(), val.c_str());
+        description = val;
+    }
+    void setReadOnly(bool val) {
+        Serial.printf("[Field] %s setReadOnly: %d -> %d\n", name.c_str(), readOnly, val);
+        readOnly = val;
+    }
+    void setIsShown(bool val) {
+        Serial.printf("[Field] %s setIsShown: %d -> %d\n", name.c_str(), isShown, val);
+        isShown = val;
+    }
+    void setIsPersisted(bool val) {
+        Serial.printf("[Field] %s setIsPersisted: %d -> %d\n", name.c_str(), isPersisted, val);
+        isPersisted = val;
+    }
+};
+
+
+--- FILE: Helper.h ---
+
+#pragma once
+#include <Arduino.h>
+#include <time.h>
+
+#include "MyMusic.h"
+
+const String NOT_PRESENT = String("255");
+
+class Helper {
+   public:
+    Helper() = default;
+    static inline int idCounter = 0;
+    static const int initialSpeakerPin = 23;
+    static void initialize(std::vector<Field>& fields) {
+        fields.clear();
+        // desired or set values AT this point for Tube rotator
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);         // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);    // MANDATORY
+        fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "info", "string", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);                // MANDATORY
+        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
+        fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
+        fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
+        fields.emplace_back(getNextIdStr(), "Rpm", "float", "200", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "Desired microstepping, only 200,400 ... 6400");
+        fields.emplace_back(getNextIdStr(), "currentStepperOnOffSwitchPosition", "bool", "1", "Shows current StepperOnOffSwitch Position. Off means turn stepper Off. Ignored if no switch", true, true, false);
+        fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
+        // on offs read from UI and set on the board. They might be overridden by physical switches
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "0", "Turns on off stepper", false, true, false);
+        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "Turns on off fan if capability exists", false, true);
+        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "Disables heater even if current temp lower than desired temp");
+        // pins
+        fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
+        // google says use GPIO25- LCD-CS0  for driving the spindle: Pin 6 on the EXP2 header
+        fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", "32", "Heater Pwm Pin");  // 32 is internally connected to spindle*/,
+        fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", "22", "StepperPwmStepPin");
+        // misc
+        fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", "21", "I2SoDataPin");
+        fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin");
+        fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin");
+        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "23", "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing providing a GND (ground) connection.
+        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");   // 33 is probably available but Probably will not work with any decent size fan because it's too weak. 33 LCD-RS currently pin 8 of expansion 1. see schematics in root
+        fields.emplace_back(getNextIdStr(), "LedPwmPin", "uint8_t", "2", "LedPwmPin");
+        fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
+        fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
+        //
+        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "80", "Max Heater Duty Cycle- normally 80-100%");
+        fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "1", "MKSBoard");
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", "36", "sets the pin to read the on-off-physical button if present ");                                  // yes 36 is for the big OS with MKS Input /*Sensor_VP SVP -*/
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode");  // maybe 26
+        //
+        fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "Most Music Off except for alarms", false, true);        // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        //
+        fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "0", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+
+        fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "Heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
+        fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
+        fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
+        //
+        fields.emplace_back(getNextIdStr(), "version", "string", "Incubated Shaker 1.2", "Version", true, true, true);
+    }
+    //
+    static void initializeSample(std::vector<Field>& fields) {
+        int idCounter = 0;
+        // desired or set values
+        fields.emplace_back(getNextIdStr(), "a", "float", "37", "desired Temperature");
+        fields.emplace_back(getNextIdStr(), "b", "int", "0", "b");
+        fields.emplace_back(getNextIdStr(), "sample version", "string", "sample", "Version", true);
+        // todo add currentStartTime
+    }
+
+   private:
+    static inline char buffer[4] = {0};  // can hold 3 digits so up to 999
+
+    static const char* getNextIdStr() {
+        // snprintf safely formats the integer into the static buffer. We use the current value of counter, then increment it.
+        std::snprintf(buffer, sizeof(buffer), "%d", idCounter++);
+        return buffer;  // Return the address of he static buffer.the memory is valid after the function returns.
+    }
+};
+
+--- FILE: HelperGoodForSmallCustomOS.txt.h ---
+
+#pragma once
+#include <Arduino.h>
+#include <time.h>
+#include "MyMusic.h"
+
+const String NOT_PRESENT = String("255");
+
+class Helper {
+    public:
+    Helper() = default;
+    static inline int idCounter = 0;
+    static const int initialSpeakerPin = 12;
+    static void initialize(std::vector<Field>& fields) {
+        fields.clear();
+        // desired or set values AT this point for Tube rotator
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);      // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "info", "string", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
+        fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
+        fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
+        fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
+        fields.emplace_back(getNextIdStr(), "Rpm", "float", "100", "desired RPM. You need to restart stepper to change this RPM.", false, true);
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "6400", "Desired microstepping, only 200,400 ... 6400");
+        fields.emplace_back(getNextIdStr(), "currentStepperOnOffSwitchPosition", "bool", "1", "Shows current StepperOnOffSwitch Position. Off means turn stepper Off. Ignored if no switch", true, true, false);
+        fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
+        fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
+        // on offs read from UI and set on the board. They might be overridden by physical switches
+        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "0", "Turns on off stepper", false, true, false);
+        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "Turns on off fan if capability exists", false, true);
+        fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "1", "Disables heater even if current temp lower than desired temp");
+        // pins
+        fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", NOT_PRESENT, "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
+        // google says use GPIO25- LCD-CS0  for driving the spindle: Pin 6 on the EXP2 header
+        fields.emplace_back(getNextIdStr(), "HeaterPwmPin", "uint8_t", NOT_PRESENT, "Heater Pwm Pin");  // 32 is internally connected to spindle*/,
+        fields.emplace_back(getNextIdStr(), "StepperPwmStepPin", "uint8_t", "25", "StepperPwmStepPin");
+        // misc
+        fields.emplace_back(getNextIdStr(), "I2SoDataPin", "uint8_t", NOT_PRESENT, "I2SoDataPin");
+        fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", NOT_PRESENT, "I2SoClockPin");
+        fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", NOT_PRESENT, "I2SoLatchPin");
+        fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", "12", "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing providing a GND (ground) connection.
+        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");   // 33 is probably available but Probably will not work with any decent size fan because it's too weak. 33 LCD-RS currently pin 8 of expansion 1. see schematics in root
+        fields.emplace_back(getNextIdStr(), "LedPwmPin", "uint8_t", "2", "LedPwmPin");
+        fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
+        fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
+        //
+        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "80", "Max Heater Duty Cycle- normally 80-100%");
+        fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "0", "MKSBoard");
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", NOT_PRESENT, "sets the pin to read the on-off-physical button if present ");                           // yes 36 is for the big OS with MKS Input /*Sensor_VP SVP -*/
+        fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", "26", "on my board we can control the on off by using ENABLEpin in output mode");         // maybe 26
+        fields.emplace_back(getNextIdStr(), "StepperStepsPerRotationM0Pin", "uint8_t", "16", "dynamic control of microstepping M0");
+        fields.emplace_back(getNextIdStr(), "StepperStepsPerRotationM1Pin", "uint8_t", "4", "dynamic control of microstepping M1");
+        fields.emplace_back(getNextIdStr(), "StepperStepsPerRotationM2Pin", "uint8_t", "15", "dynamic control of microstepping M2");
+        //
+        fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "Most Music Off except for alarms", false, true);        // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+        //
+        fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
+
+        fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "Heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
+        fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
+        fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
+        //
+        fields.emplace_back(getNextIdStr(), "version", "string", DNS, "Version", true, true, true);
+    }
+    //
+    static void initializeSample(std::vector<Field>& fields) {
+        int idCounter = 0;
+        // desired or set values
+        fields.emplace_back(getNextIdStr(), "a", "float", "37", "desired Temperature");
+        fields.emplace_back(getNextIdStr(), "b", "int", "0", "b");
+        fields.emplace_back(getNextIdStr(), "sample version", "string", "sample", "Version", true);
+        // todo add currentStartTime
+    }
+
+   private:
+    static inline char buffer[4] = {0};  // can hold 3 digits so up to 999
+
+    static const char* getNextIdStr() {
+        // snprintf safely formats the integer into the static buffer. We use the current value of counter, then increment it.
+        std::snprintf(buffer, sizeof(buffer), "%d", idCounter++);        
+        return buffer;// Return the address of he static buffer.the memory is valid after the function returns.
+    }
+};
+
+
+--- FILE: HtmlHelper.cpp ---
+
+#include "HtmlHelper.h"
+#include "Controller.h"
+
+String HtmlHelper::generateMenu() {
+    return "<p>"
+           "<a href='/'>Status</a> | "
+           "<a href='/extended'>Extended</a> | "
+           "<a href='/metadata'>Metadata</a> | "
+           "<a href='/advanced'>Advanced</a> | "
+           "<a href='/chart'>Chart</a> | "
+           "</p>";
+}
+
+String HtmlHelper::generateStatusPage(bool brief) {
+    String html = HtmlHelper::generateMenu();
+    std::vector<Field> fi;
+    if (brief) {
+        html += "<h2>The Status</h2>";
+        fi = Controller::model.getScreenFields();
+    } else {
+        html += "<h2>Extended Page</h2>";
+        fi = Controller::model.getFields();
+    }
+
+    html += R"rawliteral(
+    <style>
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
+    thead { background-color: #f0f0f0; }
+    tbody td input { width: 100%; box-sizing: border-box; }
+    </style>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Type</th><th>Value</th><th>Description</th></tr>
+        </thead>
+        <tbody id="data-body">
+    )rawliteral";
+
+    // Initial table rows
+    for (auto& f : fi) {
+        html += "<tr>";
+        html += "<td>" + f.getName() + "</td>";
+        html += "<td>" + f.getType() + "</td>";
+        html += "<td><input data-id='" + f.getId() + "' value='" + f.getValue() + "'";
+        if (f.getReadOnly()) html += " disabled";
+        html += "></td>";
+        html += "<td>" + f.getDescription() + "</td>";
+        html += "</tr>";
+    }
+
+    html += R"rawliteral(
+        </tbody>
+    </table>
+    <script>
+    const ws = new WebSocket('ws://' + location.hostname + '/ws');
+
+    // Attach onchange listeners to inputs
+    function attachInputListeners() {
+        document.querySelectorAll("input[data-id]").forEach(el => {
+            if (!el.dataset.listenerAttached) {
+                el.addEventListener("change", () => {
+                    ws.send(JSON.stringify({ action: "update", id: el.getAttribute("data-id"), value: el.value }));
+                });
+                el.dataset.listenerAttached = "true";
+            }
+        });
+    }
+    attachInputListeners();
+
+    ws.onmessage = function(evt) {
+        try {
+            const data = JSON.parse(evt.data);
+            if (!Array.isArray(data)) return;
+
+            // Update only existing input values (preserve user edits)
+            data.forEach(f => {
+                const el = document.querySelector("input[data-id='" + f.id + "']");
+                if (el && document.activeElement !== el) {
+                    if (el.value !== f.value) {
+                        el.value = f.value;
+                        el.style.transition = "background-color 0.8s";
+                        el.style.backgroundColor = "#fff3a0";
+                        setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                    }
+                }
+            });
+        } catch(e) {
+            console.error("WS update error:", e);
+        }
+    };
+    </script>
+    )rawliteral";
+
+    return html;
+}
+
+String HtmlHelper::generateMetadataPage() {
+    String html = HtmlHelper::generateMenu();
+    html += "<h2>Metadata</h2>";
+    html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
+    for (auto& f : Controller::model.getFields()) {
+        html += "<tr>";
+        html += "<td>" + f.getId() + "</td>";
+        html += "<td>" + f.getName() + "</td>";
+        html += "<td>" + f.getType() + "</td>";
+        html += "<td>" + f.getValue() + "</td>";
+        html += "<td>" + f.getDescription() + "</td>";
+        html += "<td>" + String(f.getReadOnly()) + "</td>";
+        html += "<td>" + String(f.getIsShown()) + "</td>";
+        html += "<td>" + String(f.getIsPersisted()) + "</td>";
+        html += "<td><button onclick='reorder(\"" + f.getId() + "\",true)'>&#9650;</button><button onclick='reorder(\"" + f.getId() + "\",false)'>&#9660;</button></td>";
+        html += "<td><button onclick='delField(\"" + f.getId() + "\")'>Delete</button></td>";
+        html += "</tr>";
+    }
+    html += "</tbody></table>";
+    html += "<h3>Add New Field</h3>";
+    html += "ID: <input id='fid'><br>";
+    html += "Name: <input id='fname'><br>";
+    html += "Type: <input id='ftype'><br>";
+    html += "Value: <input id='fvalue'><br>";
+    html += "Description: <input id='fdesc'><br>";
+    html += "ReadOnly: <input id='freadonly' type='checkbox'><br>";
+    html += "IsShown: <input id='fisshown' type='checkbox'><br>";
+    html += "IsPersisted: <input id='fispersisted' type='checkbox'><br>";
+    html += "<button onclick='addField()'>Add Field</button>";
+    html += R"rawliteral(
+                            <script>
+                            var ws = new WebSocket('ws://' + location.hostname + '/ws');
+                            ws.onmessage = function(evt){
+    try{
+        var data = JSON.parse(evt.data);
+        if(!Array.isArray(data)) return;
+        var tbody = document.querySelector('#meta-body');
+        if(!tbody) return;
+        tbody.innerHTML = "";
+        data.forEach(f=>{
+            var row = document.createElement("tr");
+            row.innerHTML =
+            "<td>"+f.id+"</td>"+
+            "<td>"+f.name+"</td>"+
+            "<td>"+f.type+"</td>"+
+            "<td>"+f.value+"</td>"+
+            "<td>"+f.description+"</td>"+
+            "<td>"+f.readOnly+"</td>"+
+            "<td>"+f.isShown+"</td>"+
+            "<td>"+f.isPersisted+"</td>"+            
+            "<td><button onclick='reorder(\""+f.id+"\",true)'>&#9650;</button>"+
+            "<button onclick='reorder(\""+f.id+"\",false)'>&#9660;</button></td>"+
+            "<td><button onclick='delField(\""+f.id+"\")'>Delete</button></td>";
+            tbody.appendChild(row);
+            });
+            }catch(e){console.error(e);}
+            };
+            function delField(id){ws.send(JSON.stringify({action:'delete',id:id}));}
+            function reorder(id,up){ws.send(JSON.stringify({action:up?'moveUp':'moveDown',id:id}));}
+            function addField(){
+                var fid=document.getElementById('fid').value.trim();
+                if(!fid){
+                    var maxId=0;
+                    document.querySelectorAll('#meta-body tr td:first-child').forEach(td=>{
+                        var n=parseInt(td.innerText);
+                        if(!isNaN(n)&&n>maxId) maxId=n;
+                        });
+        fid=(maxId+1).toString();
+        document.getElementById('fid').value=fid;
+    }
+    try {
+        var msg={action:'add',field:{
+            id:fid,
+            name:document.getElementById('fname').value,
+            type:document.getElementById('ftype').value,
+            value:document.getElementById('fvalue').value,
+            description:document.getElementById('fdesc').value,
+            readOnly:document.getElementById('freadonly').checked,
+            isShown:document.getElementById('fisshown').checked,
+            isPersisted:document.getElementById('fispersisted').checked
+            }};
+        } catch (error) {
+            alert(error.message);
+        }
+        //alert(" added field\n"+JSON.stringify(msg, null, 4));
+        ws.send(JSON.stringify(msg));
+        // clear inputs after sending
+        document.getElementById('fid').value="";
+        document.getElementById('fname').value="";
+        document.getElementById('ftype').value="";
+        document.getElementById('fvalue').value="";
+        document.getElementById('fdesc').value="";
+        document.getElementById('freadonly').checked=false;
+        document.getElementById('fisshown').checked=false;
+        document.getElementById('fispersisted').checked=true;
+        }
+        </script>
+        )rawliteral";
+
+    return html;
+}
+
+String HtmlHelper::generateAdvancedPage() {
+    String html = HtmlHelper::generateMenu();
+    html += "<h2>Advanced Device Management</h2><hl>";
+    html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button><hl>";
+    html += "<h3>Upload New Model JSON</h3>";
+    html += "<textarea id='jsonInput' rows='10' cols='80' placeholder='Paste new model JSON here'></textarea><br>";
+    html += "<button onclick='uploadModel()'>Upload Model</button><hl>";
+    html += "<h3>Factory Reset</h3><hl>";
+    html += "<button onclick='factoryReset()' style=\"background-color:#f66;color:white;\">Initialize Model to Factory Defaults and Save it in persistent store</button>";
+    html += "<h3>Factory Defaults Preview</h3><hl>";
+    html += "<button onclick='showFactoryModel()'>Show Current Model</button><hl> ";
+    html += "<button onclick='showFactoryJson()'>Show Factory Default Model</button>";
+    // ✅ Re-enable the display area for JSON output:
+    html += "<h3>Model Output</h3><pre id='model-json' style='background:#eee;padding:10px;border:1px solid #ccc;max-height:400px;overflow:auto;'></pre>";
+
+    html += R"rawliteral(
+        <script>
+        var ws = new WebSocket('ws://' + location.hostname + '/ws');
+        ws.onmessage = function(evt){
+            try{
+                var data = JSON.parse(evt.data);
+                document.getElementById('model-json').innerText = JSON.stringify(data, null, 2);
+            }catch(e){
+                console.error(e);
+                // If parsing fails, just show the raw message
+                document.getElementById('model-json').innerText = evt.data;
+            }
+        };
+
+        function uploadModel(){
+            var json = document.getElementById('jsonInput').value.trim();
+            if(!json){alert('Please paste JSON first');return;}
+            try{JSON.parse(json);}catch(e){alert('Invalid JSON: '+e);return;}
+            ws.send(JSON.stringify({action:'uploadModel', json:json}));
+            document.getElementById('jsonInput').value = '';
+        }
+
+        function factoryReset(){
+            if(confirm('Restore factory model? This will overwrite all current fields.')){
+                ws.send(JSON.stringify({action:'factoryReset'}));
+            }
+        }   
+
+        function showFactoryModel(){
+            ws.send(JSON.stringify({action:'showFactoryModel'}));
+        }
+
+        function showFactoryJson(){
+            ws.send(JSON.stringify({action:'showFactoryJson'}));
+        }  
+        function reboot(){
+            if(confirm('Reboot the ESP32 now?')){
+                fetch('/reboot');
+            }
+        }                   
+        </script>
+    )rawliteral";
+    return html;
+}
+String HtmlHelper::generateChartPage() {
+    String html = generateMenu();
+    html += "<h2>Live Temperature Chart</h2>";
+    html += "<canvas id='tempChart' width='800' height='400' style='border:1px solid #ccc;'></canvas>";
+    html += R"rawliteral(
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+        <script>
+        const ctx = document.getElementById('tempChart').getContext('2d');
+
+        const chartData = {
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: [],
+                fill: false,
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1
+            }]
+        };
+
+        const config = {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: false,
+                animation: false,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'second',
+                            tooltipFormat: 'HH:mm:ss',
+                            displayFormats: {
+                                second: 'HH:mm:ss'
+                            }
+                        },
+                        title: { display: true, text: 'Time' }
+                    },
+                    y: { title: { display: true, text: 'Temperature (°C)' } }
+                }
+            }
+        };
+
+        const tempChart = new Chart(ctx, config);
+        let lastUpdate = 0;
+
+        // Load previous chart state from localStorage
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('tempChartData');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    chartData.datasets[0].data = parsed.data || [];
+                    tempChart.update();
+                    console.log("[Chart] Restored from localStorage (" + chartData.datasets[0].data.length + " pts)");
+                } catch(e) {
+                    console.warn("[Chart] Failed to restore chart data:", e);
+                }
+            }
+        });
+
+        const ws = new WebSocket('ws://' + location.hostname + '/ws');
+        ws.onmessage = function(evt) {
+            const now = Date.now();
+            if (now - lastUpdate < 2000) return; // update every 2 sec
+            lastUpdate = now;
+
+            try {
+                const data = JSON.parse(evt.data);
+                if (!Array.isArray(data)) return;
+                const tempField = data.find(f => f.name === 'currentTemperature');
+                if (!tempField) return;
+                const temp = parseFloat(tempField.value);
+                if (isNaN(temp)) return;
+
+                // push point with real timestamp
+                chartData.datasets[0].data.push({ x: now, y: temp });
+
+                // keep last 15 hours (~54000 points @ 1s)
+                if (chartData.datasets[0].data.length > 54000) {
+                    chartData.datasets[0].data.shift();
+                }
+
+                tempChart.update();
+
+                // Save chart data every 10 updates
+                if (chartData.datasets[0].data.length % 10 === 0) {
+                    localStorage.setItem('tempChartData', JSON.stringify({
+                        data: chartData.datasets[0].data
+                    }));
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        // Clear storage button
+        function clearChartStorage() {
+            localStorage.removeItem('tempChartData');
+            alert('Saved chart data cleared.');
+        }
+        </script>
+        <button onclick="clearChartStorage()" style="margin-top:10px;">Clear Saved Data</button>
+    )rawliteral";
+
+    return html;
+}
+
+
+--- FILE: HtmlHelper.h ---
+
+#pragma once 
+#include <Arduino.h>
+
+class HtmlHelper {
+   public:
+    static String generateStatusPage(bool brief);
+        static String generateChartPage();
+        static String generateMenu();  // you can implement or call existing menu code
+        static String generateMetadataPage();
+        static String generateAdvancedPage();
+    };
+
+
+--- FILE: JsonWrapper.cpp ---
+
+#include "JsonWrapper.h"
+#include <Controller.h>  // Include to use MyMusic::MajorAlarm
+#include <SPIFFS.h>
+
+const char* FILE_LOCATION = "/model.json";
+// STATIC BUFFER: Pre-allocated memory to prevent heap fragmentation
+static char jsonBuffer[8192];
+
+// Forward Declarations for Helpers
+void appendRaw(char*& ptr, const char* str, const char* end);
+void appendEscaped(char*& ptr, const char* str, const char* end);
+
+const char* JsonWrapper::toJsonString(const std::vector<Field>& fields, bool justPersisted) {
+    char* ptr = jsonBuffer;
+    const char* end = jsonBuffer + sizeof(jsonBuffer);
+    appendRaw(ptr, "[", end);
+    for (size_t i = 0; i < fields.size(); i++) {
+        const auto& f = fields[i];
+        if (i > 0) appendRaw(ptr, ",", end);
+        // CRITICAL CHECK: Ensure we haven't already exceeded the buffer size
+        if (ptr >= end - 50) {
+            Controller::fatalErrorAlarm("JsonBuffer Overflow: Data truncated!");  // CHANGED CALL
+            *ptr = ']';                                                        // Terminate the array immediately
+            *(ptr + 1) = '\0';
+            return jsonBuffer;
+        }
+        appendRaw(ptr, "{\"id\":\"", end);
+        appendEscaped(ptr, f.getId().c_str(), end);
+        appendRaw(ptr, "\",\"name\":\"", end);
+        appendEscaped(ptr, f.getName().c_str(), end);
+        appendRaw(ptr, "\",\"type\":\"", end);
+        appendEscaped(ptr, f.getType().c_str(), end);
+        appendRaw(ptr, "\",\"value\":\"", end);
+        if (justPersisted && !f.getIsPersisted()) {
+            appendEscaped(ptr, "", end);
+        } else {
+            appendEscaped(ptr, f.getValue().c_str(), end);
+        }
+        appendRaw(ptr, "\",\"description\":\"", end);
+        appendEscaped(ptr, f.getDescription().c_str(), end);
+        appendRaw(ptr, "\",\"readOnly\":", end);
+        appendRaw(ptr, f.getReadOnly() ? "true" : "false", end);
+        appendRaw(ptr, ",\"isShown\":", end);
+        appendRaw(ptr, f.getIsShown() ? "true" : "false", end);
+        appendRaw(ptr, ",\"isPersisted\":", end);
+        appendRaw(ptr, f.getIsPersisted() ? "true" : "false", end);
+        appendRaw(ptr, "}", end);
+    }
+    appendRaw(ptr, "]", end);
+    return jsonBuffer;
+}
+
+String JsonWrapper::fieldToJsonString(const Field& f) {
+    JsonDocument doc;
+    JsonObject obj = doc.to<JsonObject>();
+    obj["id"] = f.getId();
+    obj["name"] = f.getName();
+    obj["type"] = f.getType();
+    obj["value"] = f.getValue();
+    obj["description"] = f.getDescription();
+    obj["readOnly"] = f.getReadOnly();
+    obj["isShown"] = f.getIsShown();
+    obj["isPersisted"] = f.getIsPersisted();
+    String result;
+    serializeJson(doc, result);
+    return result;
+}
+
+bool JsonWrapper::jsonToField(const String& jsonStr, Field& f) {
+    JsonDocument doc;
+    auto error = deserializeJson(doc, jsonStr);
+    if (error) {
+        Controller::errorAlarm("deserializeJson error");
+        return false;
+    }
+    JsonObject obj = doc.as<JsonObject>();
+    f.setId(obj["id"] | "");
+    f.setName(obj["name"] | "");
+    f.setType(obj["type"] | "");
+    f.setValue(obj["value"] | "");
+    f.setDescription(obj["description"] | "");
+    f.setReadOnly(obj["readOnly"] | false);
+    f.setIsShown(obj["isShown"] | false);
+    f.setIsPersisted(obj["isPersisted"] | true);
+    return true;
+}
+
+bool JsonWrapper::jsonToFields(const String& jsonStr, std::vector<Field>& fields) {
+    JsonDocument doc;
+    auto error = deserializeJson(doc, jsonStr);
+    if (error) {
+        String er = String(": jsonToFields could not read as valid Json the string:") + String(jsonStr);
+        Controller::fatalErrorAlarm(er.c_str());
+        return false;
+    }
+    JsonArray arr = doc.as<JsonArray>();
+    fields.clear();
+    for (JsonObject obj : arr) {
+        Field f;
+        f.setId(obj["id"] | "");
+        f.setName(obj["name"] | "");
+        f.setType(obj["type"] | "");
+        f.setValue(obj["value"] | "");
+        f.setDescription(obj["description"] | "");
+        f.setReadOnly(obj["readOnly"] | false);
+        f.setIsShown(obj["isShown"] | false);
+        f.setIsPersisted(obj["isPersisted"] | true);
+        fields.push_back(f);
+    }
+    return true;
+}
+
+String JsonWrapper::deleteFieldJson(const String& id) {
+    JsonDocument doc;
+    JsonObject obj = doc.to<JsonObject>();
+    obj["action"] = "delete";
+    obj["id"] = id;
+    String s;
+    serializeJson(doc, s);
+    return s;
+}
+
+String JsonWrapper::updateFieldJson(const Field& f) {
+    JsonDocument doc;
+    JsonObject obj = doc.to<JsonObject>();
+    obj["action"] = "update";
+    obj["id"] = f.getId();
+    obj["value"] = f.getValue();
+    String s;
+    serializeJson(doc, s);
+    return s;
+}
+
+bool JsonWrapper::saveModelToFile(const std::vector<Field>& fields) {
+    Serial.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>Saving Model to Flash >>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    File file = SPIFFS.open(FILE_LOCATION, FILE_WRITE);
+    if (!file) {
+        Controller::fatalErrorAlarm("SPIFFS File Open Failed - Save Aborted.");  // CHANGED CALL
+        return false;
+    }
+    file.print(toJsonString(fields, JUST_PERSISTED_FIELDS));
+    file.close();
+    return true;
+}
+
+bool JsonWrapper::checkJson(const String& jsonStr) {
+    JsonDocument doc;
+    auto error = deserializeJson(doc, jsonStr);
+    if (error) return false;
+    return true;
+}
+
+bool JsonWrapper::loadFieldsFromFile(std::vector<Field>& fields) {
+    if (!SPIFFS.begin(false)) {
+        Controller::fatalErrorAlarm(" SPIFFS Initialization Failed - Cannot Load Model.");  // CHANGED CALL
+        return false;
+    }
+    if (!SPIFFS.exists(FILE_LOCATION)) return false;
+    File file = SPIFFS.open(FILE_LOCATION, FILE_READ);
+    if (!file) {
+        Controller::fatalErrorAlarm("SPIFFS File Open Failed - Load Aborted.");  // CHANGED CALL
+        return false;
+    }
+    String s = file.readString();
+    file.close();
+    return jsonToFields(s, fields);
+}
+
+// Helper Implementations moved to bottom
+void appendRaw(char*& ptr, const char* str, const char* end) {
+    while (*str && ptr < end - 1) {
+        *ptr++ = *str++;
+    }
+    *ptr = '\0';
+}
+
+void appendEscaped(char*& ptr, const char* str, const char* end) {
+    while (*str && ptr < end - 2) {
+        if (*str == '"' || *str == '\\') {
+            *ptr++ = '\\';
+        }
+        *ptr++ = *str++;
+    }
+    *ptr = '\0';
+}
+
+--- FILE: JsonWrapper.h ---
+
+#pragma once
+#include <ArduinoJson.h>
+
+#include <vector>
+
+#include "Field.h"
+#define JUST_PERSISTED_FIELDS 1
+#define ALL_FIELDS 0
+
+class JsonWrapper {
+   public:
+    // Convert vector of Fields -> JSON string
+    static const char* toJsonString(const std::vector<Field>& fields,bool justPersisted=false );
+    // Convert a single Field -> JSON string
+    static String fieldToJsonString(const Field& f);
+    // Parse JSON string -> single Field
+    static bool jsonToField(const String& jsonStr, Field& f);
+    // Parse JSON string -> vector<Field>
+    static bool jsonToFields(const String& jsonStr, std::vector<Field>& fields);
+    // Generate JSON for delete action
+    static String deleteFieldJson(const String& id);
+    // Generate JSON for update action
+    static String updateFieldJson(const Field& f);
+    // Save fields to SPIFFS file
+    static bool saveModelToFile(const std::vector<Field>& fields);
+    // Load fields from SPIFFS file
+    static bool loadFieldsFromFile(std::vector<Field>& fields);
+    // checks if a string is proper Json when upload from Serial or Web
+    static bool checkJson(const String& jsonStr);
+};
+
+--- FILE: main.cpp ---
+
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <ArduinoOTA.h>
+#include <ESPAsyncWebServer.h>
+#include <ESPmDNS.h>
+#include <FS.h>
+#include <SPIFFS.h>
+#include <WiFi.h>
+
+#include <vector>
+
+#include "BackEnd.h"
+#include "Controller.h"
+#include "Field.h"
+#include "Helper.h"
+#include "HtmlHelper.h"
+#include "JsonWrapper.h"
+#include "Model.h"
+#include "Pass.h"
+#include "TimeManager.h"
+
+AsyncWebServer server(80);  // needs to persist beyond the method
+void setupOTA();
+
+void handleWebSocketMessage(String msg) {  // from the UI to board
+    JsonDocument doc;
+    if (deserializeJson(doc, msg)) return;
+    String action = doc["action"] | "";
+    if (action == "update") {
+        String id = doc["id"] | "";
+        String val = doc["value"] | "";
+        Field* f = Controller::model.getById(id);
+        if (f && !f->getReadOnly()) {
+            f->setValue(val);
+            Serial.println("[SYS] From UI set value for:" + f->getName() + " value:" + f->getValue());
+            if (f->getIsPersisted()) {
+                Controller::model.saveToFile();
+            }
+            Controller::webSocket.textAll(Controller::model.toJsonString());
+        }
+    } else if (action == "delete") {
+        String id = doc["id"] | "";
+        if (Controller::model.remove(id)) {
+            Controller::model.saveToFile();
+            Controller::webSocket.textAll(Controller::model.toJsonString());
+        }
+    } else if (action == "moveUp" || action == "moveDown") {
+        String id = doc["id"] | "";
+        Controller::model.reorder(id, action == "moveUp");
+        Controller::model.saveToFile();
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "add") {
+        JsonObject fld = doc["field"].as<JsonObject>();
+        Field f;
+        f.fromJson(fld);
+        Controller::model.add(f);
+        Controller::model.saveToFile();
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "uploadModel") {
+        Serial.println("got a uploadModel Ws action");
+        String jsonStr = doc["json"] | "";
+        if (JsonWrapper::checkJson(jsonStr)) {
+            Controller::model.loadFromJson(jsonStr);
+            Controller::model.saveToFile();
+            Serial.println("[WEB] Uploaded new model via Advanced page");
+        } else {
+            Serial.println("[WEB] Invalid JSON upload ignored");
+        }
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "factoryReset") {
+        Serial.println("[WEB] Factory reset requested from Advanced page");
+        Controller::model.initialize();
+        Controller::model.saveToFile();
+        Controller::webSocket.textAll(Controller::model.toJsonString());
+    } else if (action == "showFactoryModel") {
+        Serial.println("[WEB] Showing factory default model (object view)");
+        Model temp;
+        temp.initialize();  // create default fields
+        Controller::webSocket.textAll(temp.toJsonString());
+    } else if (action == "showFactoryJson") {
+        Serial.println("[WEB] Showing factory default model (raw JSON view)");
+        Model temp;
+        temp.initialize();
+        String json = temp.toJsonString();
+        Controller::webSocket.textAll(json);
+    }
+}
+
+// NTP Server settings
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -18000;    // Set your GMT offset in seconds (e.g., EST is -5 hours * 3600 seconds/hour = -18000)
+const int daylightOffset_sec = 3600;  // Set your daylight saving offset in seconds (e.g., 1 hour = 3600 seconds)
+//
+void loopBackendTask(void* param);
+
+void spiffInit() {
+    // Attempt to mount without formatting
+    if (!SPIFFS.begin(false)) {
+        Serial.println("E (1843) SPIFFS: mount failed, -10025: Trying to format...");
+        Controller::fatalErrorAlarm("[FS] Mount failed! Trying to reformat");
+        // Attempt to format and mount (this is the crucial step)
+        if (!SPIFFS.begin(true)) {
+            // If the format/mount also fails, this is a serious, unrecoverable error
+            Serial.println("FATAL: Format and Mount failed! Stopping here.");
+            // Stop execution, e.g., while(true); or an error handler
+            while (true);
+        } else {
+            // SUCCESS after a forced format
+            Serial.println("[FS] Reformat successful and Mounted.");
+        }
+    } else {
+        // SUCCESS on the initial attempt
+        Serial.println("[FS] Mounted successfully.");
+    }
+}
+//
+void setup() {
+    Serial.begin(115200);
+    ledcSetup(SPEAKER_CHANNEL, 5000, 8);  // no need to declare pin as output
+    ledcAttachPin(Helper::initialSpeakerPin, SPEAKER_CHANNEL);
+    ledcWrite(SPEAKER_CHANNEL, 0);
+    MyMusic::play(MyMusic::wakeUp);
+    Serial.println("[SYS] Booting...");
+    WiFi.begin(getSsid(), getPass());
+    Serial.printf("[WiFi] Connecting to %s ", getSsid());
+    int timeout = 0;
+    while (WiFi.status() != WL_CONNECTED && timeout < 20) {
+        delay(500);
+        Serial.print(".");
+        -timeout++;
+    }
+    Serial.println();
+    String wifiStatus;
+    if (WiFi.status() == WL_CONNECTED) {
+        MyMusic::play(MyMusic::wifi);
+        wifiStatus = "[WiFi] IP: " + WiFi.localIP().toString();
+        Serial.println(wifiStatus);
+        setupOTA();
+    } else {
+        wifiStatus = "[WiFi] Connection failed!";
+        Controller::fatalErrorAlarm(wifiStatus.c_str());
+    }
+    String when;
+    if (Serial.available()) {
+        String line = Serial.readStringUntil('\n');
+        if (line.startsWith("!")) {
+            Serial.println("!!!!! forced reinitialization of the model in setup");
+            Controller::model.initialize();
+        }
+        if (line.startsWith("@")) {
+            Serial.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!bailing out after getting WIFi connection to avoid reboots");
+            return;  // last resort so we can still use OTA
+        }
+    }
+    spiffInit();
+    bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    if (!res) {
+        Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
+    }
+    Controller::status(wifiStatus + ", " + DNS);
+    // Initialize and get the time from NTP server
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    const char* bootTime = TimeManager::getBootTimeAsString();
+    Controller::set("bootTime", bootTime);
+    Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
+    Serial.println(Controller::Controller::webSocket.url());
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(true)); });
+    server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html  charset=utf-8", HtmlHelper::generateStatusPage(false)); });
+    server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateMetadataPage()); });
+    server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateAdvancedPage()); });
+    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
+    server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
+
+    Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
+        if (type == WS_EVT_DATA) {
+            String msg;
+            for (size_t i = 0; i < len; i++)
+                msg += (char)data[i];
+            handleWebSocketMessage(msg);
+        }
+    });
+    server.addHandler(&Controller::webSocket);
+    server.begin();
+    BackEnd::setupBackend();
+    xTaskCreate(loopBackendTask, "LoopBackend", 8192, nullptr, 1, nullptr);
+    Serial.println("[SYS] Main Setup complete.");
+}
+//
+void loopBackendTask(void* param) {
+    for (;;) {
+        // Place the original code from loopBackend here
+        BackEnd::loopBackend();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}
+//
+bool first = true;
+void serialLoop() {
+    if (first) {
+        Serial.println("serial loop started");
+        Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
+        first = false;
+    }
+    if (Serial.available()) {
+        String line = Serial.readStringUntil('\n');
+        line.trim();
+        if (line == "m")
+            Controller::model.listSerial();
+        else if (line == "j") {
+            Serial.println("memory model is:");
+            Serial.println(Controller::model.toJsonString());
+        } else if (line.startsWith("upload ")) {
+            String jsonStr = line.substring(line.indexOf(' ') + 1);
+            jsonStr.trim();
+            if (JsonWrapper::checkJson(jsonStr)) {
+                Controller::model.loadFromJson(jsonStr);
+                Serial.println("Json replaced but not persisted !!!!!!!!!!!");
+            } else {
+                Serial.println("New entered Json does not parse so Model remained unchanged");
+            }
+            Controller::webSocket.textAll(Controller::model.toJsonString());
+        } else if (line.startsWith("add ")) {
+            Field f;
+            f.setReadOnly(false);
+            int idx;
+            idx = line.indexOf("name=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.setName(line.substring(idx + 5, e));
+            }
+            idx = line.indexOf("id=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.setId(line.substring(idx + 3, e));
+            } else {
+                Serial.println("TODO should default the id if not present int the field");
+            }
+            idx = line.indexOf("type=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.setType(line.substring(idx + 5, e));
+            }
+            idx = line.indexOf("value=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.setValue(line.substring(idx + 6, e));
+            }
+            idx = line.indexOf("description=");
+            if (idx >= 0) {
+                int e = line.indexOf(" ", idx);
+                if (e < 0) e = line.length();
+                f.setDescription(line.substring(idx + 12, e));
+            }
+            idx = line.indexOf("readonly=");
+            if (idx >= 0) {
+                f.setReadOnly((line.substring(idx + 9, idx + 10) == "1"));
+            }
+            idx = line.indexOf("isshown=");
+            if (idx >= 0) {
+                f.setIsShown((line.substring(idx + 9, idx + 10) == "1"));
+            }
+            idx = line.indexOf("ispersisted=");
+            if (idx >= 0) {
+                f.setIsPersisted((line.substring(idx + 9, idx + 10) == "1"));
+            }
+            if (f.getName() != "") {
+                Controller::model.add(f);
+                Serial.printf("[SERIAL] Added field %s\n", f.getName().c_str());
+                Controller::model.saveToFile();
+                Controller::webSocket.textAll(Controller::model.toJsonString());
+            }
+        } else if (line.startsWith("delete ")) {
+            String name = line.substring(7);
+            Field* f = Controller::model.getByName(name);
+            if (f) {
+                Controller::model.remove(f->getId());
+                Serial.printf("[SERIAL] Deleted field  %s\n", name.c_str());
+                Controller::model.saveToFile();
+                Controller::webSocket.textAll(Controller::model.toJsonString());
+            }
+        } else if (line == "r") {
+            Controller::model.initialize();
+            Serial.printf("[SERIAL] Reinitialized the whole Controller::model");
+        } else if (line.startsWith("restart")) {
+            Serial.println("[SERIAL] restart ESP32...");
+            delay(200);
+            ESP.restart();
+        } else if (line == "?") {
+            Serial.println("\n--- Available Serial Commands ---");
+            Serial.println("? or help          : Display this help message");
+            Serial.println("m                  : List current Controller::model fields details");
+            Serial.println("j                  : Print full Controller::model as JSON string");
+            Serial.println("upload <json_str>  : Replace entire Controller::model with new JSON data");
+            Serial.println("add name=... id=...: Add a new field (supply all params)");
+            Serial.println("delete <name>      : Delete a field by name");
+            Serial.println("<name>=<value>     : Update the value of an existing field");
+            Serial.println("r                  : reset reinitialize fields with factory setting");
+            Serial.println("restart            : Restart the ESP32");
+            Serial.println("-----------------------------------\n");
+        } else {  // we assume this is like FieldName=newValue
+            int eq = line.indexOf('=');
+            if (eq > 0) {
+                String name = line.substring(0, eq);
+                String val = line.substring(eq + 1);
+                Field* f = Controller::model.getByName(name);
+                if (f) {
+                    f->setValue(val);
+                    if (f->getIsPersisted()) Controller::model.saveToFile();
+                    Serial.printf("[SERIAL] Updated %s = %s\n", f->getName().c_str(), f->getValue().c_str());
+                    Controller::webSocket.textAll(Controller::model.toJsonString());
+                } else {
+                    Serial.printf("[SERIAL] !!! cannot find any field with this name");
+                }
+            }
+        }
+    }
+}
+//
+void loop() {
+    ArduinoOTA.handle();
+    serialLoop();
+}
+// --- OTA Setup Function ---
+void setupOTA() {
+    // Use the same mDNS hostname
+    const char* hostname = DNS;
+    ArduinoOTA.setHostname(hostname);
+    Serial.printf("ArduinoOTA.setHostname done, %s %s:", hostname, ".local");
+    // Optional: Set a password for security  // ArduinoOTA.setPassword("your_ota_password");
+    // Configure callbacks for OTA events
+    ArduinoOTA.onStart([]() {
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH) {
+            type = "sketch";
+        } else {  // U_SPIFFS
+            type = "filesystem";
+        }
+        Serial.println("Start updating " + type);
+        // You may want to stop web services or motors here during an update
+    });
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\nEnd OTA update.");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("OTA Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR)
+            Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR)
+            Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR)
+            Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR)
+            Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR)
+            Serial.println("End Failed");
+    });
+    ArduinoOTA.begin();
+    Serial.println("OTA service initialized.");
+}
+// --------------------------
+
+--- FILE: Microstepping.h ---
+
+#pragma once
+enum {
+    STEPS200 = 200,
+    STEPS400 = 400,
+    STEPS800 = 800,
+    STEPS1600 = 1600,
+    STEPS3200 = 3200,
+    STEPS6400 = 6400,
+};
+
+--- FILE: Model.h ---
+
+#pragma once
+#include <SPIFFS.h>
+
+#include "Field.h"
+#include "Helper.h"
+#include "JsonWrapper.h"
+#include "MyMusic.h"
+
+class Model {
+   private:
+    std::vector<Field> fields;
+
+   public:
+    std::vector<Field>& getFields() {
+        return fields;
+    }
+    std::vector<Field> getScreenFields() {
+        std::vector<Field> shownFields;
+        for (const Field& field : fields) {
+            if (field.getIsShown()) {
+                shownFields.push_back(field);
+            }
+        }
+        return shownFields;
+    }
+    Field* getById(const String& id) {
+        for (auto& f : fields)
+            if (f.getId() == id) return &f;
+        return nullptr;
+    }
+    Field* getByName(const String& name) {
+        for (auto& f : fields)
+            if (f.getName() == name) return &f;
+        return nullptr;
+    }
+    void add(Field f) {
+        fields.push_back(f);
+        Serial.println("[Model] added field " + f.getName());
+    }
+    bool remove(const String& id) {
+        for (size_t i = 0; i < fields.size(); i++) {
+            if (fields[i].getId() == id) {
+                fields.erase(fields.begin() + i);
+                return true;
+                Serial.println("{Model] removed field " + fields[i].getName());
+            }
+        }
+        return false;
+    }
+    void reorder(const String& id, bool up) {
+        for (size_t i = 0; i < fields.size(); i++) {
+            if (fields[i].getId() == id) {
+                if (up && i > 0)
+                    std::swap(fields[i], fields[i - 1]);
+                else if (!up && i < fields.size() - 1)
+                    std::swap(fields[i], fields[i + 1]);
+                break;
+            }
+        }
+    }
+    void initialize() {
+        Serial.println("[MODEL] Initialize model by loading factory hardcoded model");
+        Helper::initialize(fields);
+    }
+    void initializeSample() {
+        Serial.println("[MODEL] Initialize just SAMPLE model by loading factory model");
+        Helper::initializeSample(fields);
+    }
+    bool loadFromJson(const String& json) {
+        return JsonWrapper::jsonToFields(json, fields);
+    }
+    //
+    /** normal load returns true, initialize returns false */
+    bool load() {
+        // Attempt to load from file. If successful AND fields are present, return true.
+        bool loadedFromFile = JsonWrapper::loadFieldsFromFile(fields);
+        if (loadedFromFile && !fields.empty()) {
+            return true;
+        } else {           
+            initialize();   // If load failed or file was empty, initialize factory model.
+            return false;
+        }
+    }
+    bool saveToFile() {
+        File file = SPIFFS.open("/model.json", "w");
+        if (!file) {
+            Serial.println("error in model saveToFile file");
+            return false;
+        }
+        return JsonWrapper::saveModelToFile(fields);
+    }
+    const char* toJsonString() {
+        return JsonWrapper::toJsonString(fields);
+    }
+    String toBriefJsonString() {
+        String result = "Brief for Fields size:" + String(fields.size());
+        if (fields.size() >= 2) {
+            result += ", " + fields.at(0).getName() + " ,";
+            result += fields.at(fields.size() - 1).getName();
+        }
+        return result;
+    }
+    void listSerial() {
+        for (auto& f : fields) Serial.printf("%s (%s) = %s\n", f.getName().c_str(), f.getType().c_str(), f.getValue().c_str());
+    }
+};
+
+--- FILE: MyMusic.cpp ---
+
+#include <Melody.h>
+//
+#include "MyMusic.h"
+
+const uint8_t SPEAKER_CHANNEL = 12;
+const int MinHardware_LOUDNESS = 0;
+const int MaxHardware_LOUDNESS = 16;
+
+
+//
+void MyMusic::setLoudness(int loudness) {
+    ledcWrite(SPEAKER_CHANNEL, map(loudness, -4, 4, MinHardware_LOUDNESS, MaxHardware_LOUDNESS));
+}
+void MyMusic::play(Melody melody) {
+    melody.restart();
+    while (melody.hasNext()) {
+        melody.next();
+        unsigned int frequency = melody.getFrequency();
+        unsigned long duration = melody.getDuration();
+        unsigned int loudness = melody.getLoudness();
+        if (frequency > 0) {
+            ledcWriteTone(SPEAKER_CHANNEL, frequency);
+            setLoudness(loudness);  // adrian bypasseed to try TODO
+        } else {
+            ledcWrite(SPEAKER_CHANNEL, 0);// off
+        }
+        delay(duration);
+        ledcWrite(SPEAKER_CHANNEL, 0);
+        delay(1);
+    }
+    ledcWrite(SPEAKER_CHANNEL, 0);
+    delay(1000);
+}
+
+
+void MyMusic::play(Melody melody, bool force) {
+    if (force) {
+        play(melody);
+    }
+}
+
+--- FILE: MyMusic.h ---
+
+#pragma once
+#include <Melody.h>
+
+extern const uint8_t SPEAKER_CHANNEL;
+#define DNS "custom os"
+
+class MyMusic {
+    public:
+    static inline Melody scaleLouder = Melody("c>>> d>> e>f g< a<< b<<< c*<<<<", 480);
+    static inline Melody invalidChoice = Melody(" (cg_)__");
+    static inline Melody validChoice = Melody(" (cgc*)**---");
+    static inline Melody frereJacques = Melody("(cdec)x2   (efgr)x2;//   ((gagf)-ec)x2     (c g_ c+)x2");
+    static inline Melody frereJacquesFull = Melody("(cdec)x2   (efgr)x2  ((gagf)-ec)x2     (c g_ c+)x2");
+    static inline Melody auClairDeLaLune = Melody("cccde+dr  ceddc+.r");
+    static inline Melody darthVader = Melody(" (ggg e,-. b,-- | g e,-. b,-- g+ (ddde,-.)* b,--  | g, e,-. b,-- g+ | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. g,-- | b, g-. b,-- d*+  | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. b,-- | g e,-. b,-- g+ |)<<_ ");
+    static inline Melody wakeUp = Melody("c<<<<");
+    static inline Melody wifi = Melody("e<<<<");
+    static inline Melody backend = Melody("f<<<<");
+    static inline Melody backendend = Melody("g<<<<");
+    static inline Melody tempUnder37 = Melody("(fg)x1");
+    static inline Melody temp37 = Melody("(fg)x2");
+    static inline Melody fatalErrorAlarmMusic = Melody("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
+    static inline Melody errorAlarmMusic = Melody("(g-32 e-32)x4", 380);
+    static inline Melody warningAlarmMusic = Melody("(e16 g16)x2 r8", 480);
+    static inline Melody infoAlarmMusic = Melody("(c8 e8 g8) r8", 600);
+
+    MyMusic();
+    static void play(Melody melody);
+    static void play(Melody melody, bool force);
+    static void setLoudness(int loudness);
+};
+
+
+--- FILE: Pass.h ---
+
+#pragma once
+#include <ArduinoJson.h>
+
+const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
+  JsonDocument doc;
+const char * getSsid(){
+  DeserializationError error = deserializeJson(doc, jsonString);
+  if (error) {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return "";
+  } else {
+      return doc["ssid"];
+  }
+}
+const char * getPass(){
+  DeserializationError error = deserializeJson(doc, jsonString);
+  if (error) {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return "";
+  } else {
+      return doc["password"];
+  }
+}
+
+--- FILE: TimeManager.cpp ---
+
+#include "TimeManager.h"
+
+#include <Controller.h>
+#include <WiFi.h>
+
+const long gmtOffset_sec = -14400;  // Adjusted from 3600 to -14400 (4 hours back for EST)
+const int daylightOffset_sec = 3600;
+
+void TimeManager::initTime() {
+    // If connection is not active, configTime will fail
+    if (WiFi.status() != WL_CONNECTED) {
+        Controller::fatalErrorAlarm("WiFi NOT Connected - Time Sync Failed.");
+    }
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+}
+
+const char* TimeManager::getCurrentTimeAsString() {
+    struct tm timeinfo;
+    // Check if time is available
+    if (!getLocalTime(&timeinfo)) {
+        Controller::fatalErrorAlarm("NTP Time Sync Failed - No Network Time.");
+        const char* errorMsg = "Time Not Synced";
+        strncpy(ts, errorMsg, TIME_STRING_BUFFER_SIZE);
+        ts[TIME_STRING_BUFFER_SIZE - 1] = '\0';
+        return ts;
+    }
+    size_t result = strftime(ts, TIME_STRING_BUFFER_SIZE, "%a, %b %d %Y, %H:%M:%S", &timeinfo);
+    if (result == 0) {
+        const char* errorMsg = "-1";
+        strncpy(ts, errorMsg, TIME_STRING_BUFFER_SIZE);
+        ts[TIME_STRING_BUFFER_SIZE - 1] = '\0';
+    }
+    return ts;
+}
+
+time_t TimeManager::getDesiredEndTime(const String& hours, const String& minutes) {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) return 0;
+    time_t currentTime_unix = mktime(&timeinfo);
+    int h = hours.toInt();
+    int m = minutes.toInt();
+    if (h == 0 && m == 0) return 0;
+    long timeToAdd_sec = (long)h * 3600 + (long)m * 60;
+    return currentTime_unix + timeToAdd_sec;
+}
+
+String TimeManager::formatUnixTime(time_t unixTime) {
+    if (unixTime == 0) return "Not Set";
+    struct tm* tm_info;
+    tm_info = localtime(&unixTime);
+    size_t result = strftime(ts, TIME_STRING_BUFFER_SIZE, "%a, %b %d %Y, %H:%M:%S", tm_info);
+    if (result == 0) return "-1";
+    return String(ts);
+}
+
+int TimeManager::isDesiredEndTimeReached(time_t endTime_unix) {
+    if (endTime_unix == 0) return -1;
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) return -2;
+    time_t currentTime_unix = mktime(&timeinfo);
+    if (currentTime_unix < endTime_unix) {
+        return 0;
+    } else
+        return 1;
+}
+
+const char* TimeManager::getBootTimeAsString() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        const char* errorMsg = "-1";
+        strncpy(bts, errorMsg, TIME_STRING_BUFFER_SIZE);
+        bts[TIME_STRING_BUFFER_SIZE - 1] = '\0';
+        return bts;
+    }
+    time_t bootTime_unix = mktime(&timeinfo);
+    size_t result = strftime(bts, TIME_STRING_BUFFER_SIZE, "%a, %b %d %Y, %H:%M:%S", &timeinfo);
+    if (result == 0) {
+        const char* errorMsg = "-1";
+        strncpy(bts, errorMsg, TIME_STRING_BUFFER_SIZE);
+        bts[TIME_STRING_BUFFER_SIZE - 1] = '\0';
+    }
+    return bts;
+}  // In src/TimeManager.cpp (add this function implementation):
+
+// Helper to convert a string (e.g., "2025-12-01 14:30:00") and its format to a numeric time_t value.
+time_t TimeManager::dateTimeStringToTimeT(const char* dateTimeStr, const char* format) {
+    struct tm timeinfo = {0};
+    // strptime reads the string into the tm structure based on the format.
+    if (strptime(dateTimeStr, format, &timeinfo) == NULL) {
+        Serial.printf("Error parsing date-time string: %s with format %s\n", dateTimeStr, format);
+        return (time_t)-1;
+    }
+    // MODIFICATION: Set seconds to zero to normalize the comparison time.
+    timeinfo.tm_sec = 0;
+    // mktime converts the tm structure (local time) into a numeric time_t timestamp.
+    return mktime(&timeinfo);
+}
+
+int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndTime) {
+    if (strcmp(desiredHeatingEndTime, "-1") == 0) {
+        return -1;
+    }
+    time_t endTime_unix = TimeManager::dateTimeStringToTimeT(desiredHeatingEndTime, "%Y-%m-%d %H:%M:%S");
+    if (endTime_unix == -1) {
+        //Serial.printf("!!!!!! desiredHeatingEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredHeatingEndTime);
+        return -1;  // something wrong
+    }
+    struct tm timeinfo;
+    const char* formatStr = "2025-11-12 13:00:00";
+    if (!getLocalTime(&timeinfo)) {
+        Controller::fatalErrorAlarm("cannot get current time from wifi in checkIfHeatingDateTimeWasReached.");
+        return -1;
+    }
+    // Convert the normalized current time structure to a numeric time_t timestamp.
+    time_t currentTime_normalized = mktime(&timeinfo);
+    if (currentTime_normalized < 100000) {
+        Serial.println("Error: Current time not yet synchronized.");
+        return -1;
+    }
+    // 3. Comparison Logic (now comparing normalized timestamps)
+    if (currentTime_normalized < endTime_unix) {
+        return 0;  // Current time is before target time
+    } else
+        return 1;  // Current time is equal or after target time}
+}
+
+
+--- FILE: TimeManager.h ---
+
+#pragma once
+#include <Arduino.h>
+#include <time.h>  // Ensure time() is available
+
+class TimeManager {
+   private:
+    static constexpr const char* ntpServer = "pool.ntp.org";
+    static constexpr size_t TIME_STRING_BUFFER_SIZE = 64;
+    static inline char ts[TIME_STRING_BUFFER_SIZE] = {0};
+    static inline char bts[TIME_STRING_BUFFER_SIZE] = {0};
+    static time_t dateTimeStringToTimeT(const char* dateTimeStr, const char* format);
+
+   public:
+    // Added function declarations to match the definitions in TimeManager.cpp
+    static void initTime();
+    static const char* getCurrentTimeAsString();
+    static time_t getDesiredEndTime(const String& hours, const String& minutes);
+    static String formatUnixTime(time_t unixTime);
+    static int isDesiredEndTimeReached(time_t endTime_unix);
+    static const char* getBootTimeAsString();
+    static int checkIfHeatingDateTimeWasReached(const char* dateTimeStr);
+};
+

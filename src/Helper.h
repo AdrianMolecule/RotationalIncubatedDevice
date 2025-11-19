@@ -59,7 +59,7 @@ class Helper {
         fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
         //
-        fields.emplace_back(getNextIdStr(), "version", "string", "Incubated Shaker 1.2", "Version", true, true, true);
+        fields.emplace_back(getNextIdStr(), "version", "string", "Incubated Shaker 1.3", "Version", true, true, true);
     }
     //
     static void initializeSample(std::vector<Field>& fields) {

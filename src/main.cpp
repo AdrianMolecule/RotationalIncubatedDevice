@@ -37,18 +37,21 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
                 Controller::model.saveToFile();
             }
             Controller::webSocket.textAll(Controller::model.toJsonString());
+            Controller::eraseInfo();
         }
     } else if (action == "delete") {
         String id = doc["id"] | "";
         if (Controller::model.remove(id)) {
             Controller::model.saveToFile();
             Controller::webSocket.textAll(Controller::model.toJsonString());
+            Controller::eraseInfo();
         }
     } else if (action == "moveUp" || action == "moveDown") {
         String id = doc["id"] | "";
         Controller::model.reorder(id, action == "moveUp");
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
+        Controller::eraseInfo();
     } else if (action == "add") {
         JsonObject fld = doc["field"].as<JsonObject>();
         Field f;
@@ -56,6 +59,7 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         Controller::model.add(f);
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
+        Controller::eraseInfo();
     } else if (action == "uploadModel") {
         Serial.println("got a uploadModel Ws action");
         String jsonStr = doc["json"] | "";
@@ -67,22 +71,26 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
             Serial.println("[WEB] Invalid JSON upload ignored");
         }
         Controller::webSocket.textAll(Controller::model.toJsonString());
+        Controller::eraseInfo();
     } else if (action == "factoryReset") {
         Serial.println("[WEB] Factory reset requested from Advanced page");
         Controller::model.initialize();
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
+        Controller::eraseInfo();
     } else if (action == "showFactoryModel") {
         Serial.println("[WEB] Showing factory default model (object view)");
         Model temp;
         temp.initialize();  // create default fields
         Controller::webSocket.textAll(temp.toJsonString());
+        Controller::eraseInfo();
     } else if (action == "showFactoryJson") {
         Serial.println("[WEB] Showing factory default model (raw JSON view)");
         Model temp;
         temp.initialize();
         String json = temp.toJsonString();
         Controller::webSocket.textAll(json);
+        Controller::eraseInfo();
     }
 }
 
@@ -168,7 +176,8 @@ void setup() {
     server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html  charset=utf-8", HtmlHelper::generateStatusPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateMetadataPage()); });
     server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateAdvancedPage()); });
-    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
+    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r)    { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
+    server.on("/log", HTTP_GET, [](AsyncWebServerRequest* r    )  { r->send(200, "text/html", HtmlHelper::generateLogPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
 
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
@@ -216,7 +225,7 @@ void serialLoop() {
                 Controller::model.loadFromJson(jsonStr);
                 Serial.println("Json replaced but not persisted !!!!!!!!!!!");
             } else {
-                Serial.println("New entered Json does not parse so Model remained unchanged");
+                Serial.println("Entered Json does not parse so Model remained unchanged");
             }
             Controller::webSocket.textAll(Controller::model.toJsonString());
         } else if (line.startsWith("add ")) {
@@ -322,7 +331,7 @@ void serialLoop() {
 //
 void loop() {
     ArduinoOTA.handle();
-    serialLoop();
+    //serialLoop();
 }
 // --- OTA Setup Function ---
 void setupOTA() {

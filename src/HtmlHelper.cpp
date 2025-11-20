@@ -9,6 +9,7 @@ String HtmlHelper::generateMenu() {
            "<a href='/metadata'>Metadata</a> | "
            "<a href='/advanced'>Advanced</a> | "
            "<a href='/chart'>Chart</a> | "
+           "<a href='/log'>Log</a> | "
            "</p>";
 }
 
@@ -101,11 +102,59 @@ String HtmlHelper::generateStatusPage(bool brief) {
                         setTimeout(() => { el.style.backgroundColor = ""; }, 800);
                     }
                 }
+                // NEW: Add only NEW info entries to the client log + clear textbox
+                if (f.name === "info" && f.value) {
+                    let parts = f.value.split(";");
+                    let newest = parts[parts.length - 1].trim();
+                    if (newest.length > 0) {
+                        if (infoLog.length === 0 || !infoLog[infoLog.length - 1].endsWith(newest)) {
+                            addLogEntry(newest);
+
+                            // Clear the info input textbox on the page
+                            const infoInput = document.querySelector("input[data-id='" + f.id + "']");
+                            if (infoInput && document.activeElement !== infoInput) {
+                                infoInput.value = "";
+                                infoInput.style.backgroundColor = "#eee";          // visual feedback
+                                setTimeout(() => { infoInput.style.backgroundColor = ""; }, 300);
+                            }
+                        }
+                    }
+                }                    
             });
         } catch(e) {
             console.error("WS update error:", e);
         }
     };
+        // --- CLIENT-SIDE INFO LOG ---
+    // Load previous log if exists
+    let infoLog = [];
+    // Restore from session (survives refresh, but not browser restart)
+    if (sessionStorage.getItem("infoLog")) {
+        try { infoLog = JSON.parse(sessionStorage.getItem("infoLog")); }
+        catch(e) { infoLog = []; }
+    }
+    // Create the log UI
+    let logBox = document.createElement("textarea");
+    logBox.id = "clientLog";
+    logBox.style.width = "100%";
+    logBox.style.height = "200px";
+    logBox.style.marginTop = "20px";
+    logBox.style.whiteSpace = "pre-wrap";
+    logBox.readOnly = true;
+    logBox.value = infoLog.join("\n");
+    document.body.appendChild(logBox);
+    // Function to add a new entry
+    function addLogEntry(msg) {
+        const ts = new Date().toLocaleTimeString();
+        const line = `[${ts}] ${msg}`;
+        infoLog.push(line);
+
+        // limit growth to avoid browser bloat
+        if (infoLog.length > 1000)
+            infoLog.shift();
+        sessionStorage.setItem("infoLog", JSON.stringify(infoLog));
+        document.getElementById("clientLog").value = infoLog.join("\n");
+    }
     </script>
     )rawliteral";
 
@@ -142,9 +191,9 @@ String HtmlHelper::generateMetadataPage() {
     html += "IsPersisted: <input id='fispersisted' type='checkbox'><br>";
     html += "<button onclick='addField()'>Add Field</button>";
     html += R"rawliteral(
-                            <script>
-                            var ws = new WebSocket('ws://' + location.hostname + '/ws');
-                            ws.onmessage = function(evt){
+    <script>
+    var ws = new WebSocket('ws://' + location.hostname + '/ws');
+    ws.onmessage = function(evt){
     try{
         var data = JSON.parse(evt.data);
         if(!Array.isArray(data)) return;
@@ -273,6 +322,35 @@ String HtmlHelper::generateAdvancedPage() {
     )rawliteral";
     return html;
 }
+//
+String HtmlHelper::generateLogPage() {
+    String html = HtmlHelper::generateMenu();
+    html += "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Log</title>";
+    html += "<style>body{font-family:sans-serif;margin:10px;}textarea{width:100%;height:400px;white-space:pre-wrap;}button{margin-top:10px;padding:6px 14px;}#topbar{margin-bottom:10px;}a{margin-right:15px;}</style>";
+    html += "</head><body>";
+    html += "<h2>Program Log</h2>";
+    html += "<textarea id='progLog' readonly></textarea><br>";
+    html += "<button onclick='clearLog()'>Clear Log</button>";
+
+    html += "<script>";
+    html += "let progLog=[];";
+    html += "if(sessionStorage.getItem('progLog')){progLog=JSON.parse(sessionStorage.getItem('progLog'));}";
+    html += "function drawLog(){const el=document.getElementById('progLog');el.value=progLog.join('\\n');el.scrollTop=el.scrollHeight;}";
+    html += "function appendProgramLog(msg){const ts=new Date().toLocaleTimeString();const line='['+ts+'] '+msg;progLog.push(line);if(progLog.length>2000)progLog.shift();sessionStorage.setItem('progLog',JSON.stringify(progLog));drawLog();}";
+    html += "function clearLog(){progLog=[];sessionStorage.setItem('progLog','[]');drawLog();}";
+
+    html += "drawLog();";
+
+    html += "const ws=new WebSocket('ws://'+location.hostname+'/ws');";
+    html += "ws.onmessage=function(evt){try{const msg=JSON.parse(evt.data);if(msg.action==='log'){appendProgramLog(msg.msg);}}catch(e){console.log(e);}};";
+    html += "</script>";
+
+    html += "</body></html>";
+
+    return html;
+}
+
+//
 String HtmlHelper::generateChartPage() {
     String html = generateMenu();
     html += "<h2>Live Temperature Chart</h2>";

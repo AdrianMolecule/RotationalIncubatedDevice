@@ -19,7 +19,8 @@ class MyMusic {
     static inline Melody backendend = Melody("g<<<<");
     static inline Melody tempUnder37 = Melody("(fg)x1");
     static inline Melody temp37 = Melody("(fg)x2");
-    static inline Melody fatalErrorAlarmMusic = Melody("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
+    static inline Melody processFinished = Melody("c<<<<8 e<<<<8", 600);
+     static inline Melody fatalErrorAlarmMusic = Melody("c*64 b64 a64 g64 c*64 b64 a64 g64 (c*16g-16)x4", 320);
     static inline Melody errorAlarmMusic = Melody("(g-32 e-32)x4", 380);
     static inline Melody warningAlarmMusic = Melody("(e16 g16)x2 r8", 480);
     static inline Melody infoAlarmMusic = Melody("(c8 e8 g8) r8", 600);

@@ -1,6 +1,10 @@
 #pragma once
 #include <ESPAsyncWebServer.h>
 
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
 #include "Field.h"
 #include "Model.h"
 
@@ -81,33 +85,54 @@ class Controller {
     //
 
     static void fatalErrorAlarm(const char* message) {
-        Serial.print("Fatal Error Alarm: ");
-        Serial.println(message);
+        Controller::log(" Fatal Error Alarm %s", message);
         MyMusic::play(MyMusic::fatalErrorAlarmMusic);
         Controller::error(message);
     }
     //
     static void errorAlarm(const char* message) {
-        Serial.print("Fatal Error Alarm: ");
-        Serial.println(message);
+        Controller::log(" Error Alarm %s", message);
         MyMusic::play(MyMusic::errorAlarmMusic);
         Controller::error(message);
     }
 
     static void warningAlarm(const char* message) {
-        Serial.print("Warning Alarm: ");
-        Serial.println(message);
+        Controller::log(" Warning Alarm %s", message);
         MyMusic::play(MyMusic::warningAlarmMusic);
         Controller::warning(message);
     }
 
-    static void infoAlarm(const char* message) {
-        Serial.print("Info Alarm: ");
-        Serial.println(message);
-        MyMusic::play(MyMusic::infoAlarmMusic);
-        Controller::info(message);
+    static void infoAlarm(const char* message, Melody m = MyMusic::infoAlarmMusic) {
+        MyMusic::play(m);
+        Controller::log(" Info Alarm %s",message);
     }
-
+    //
+    static void eraseInfo() {
+        Controller::set("info", "");
+    }
+    //
+    static void log(const char* format, ...) {  // Changed from const String& msg to const char* format
+        const size_t BUFFER_SIZE = 200;
+        char logMessageBuffer[BUFFER_SIZE];
+        // Start variadic arguments handling
+        va_list args;
+        va_start(args, format);
+        // Safely format the arguments into the buffer
+        vsnprintf(logMessageBuffer, BUFFER_SIZE, format, args);
+        // End variadic arguments handling
+        va_end(args);
+        // Now proceed with your JSON serialization using the buffer
+        Serial.println(logMessageBuffer);
+        JsonDocument doc;
+        doc["action"] = "log";
+        // Use the C-style string buffer for the message
+        doc["msg"] = logMessageBuffer;
+        String out;
+        serializeJson(doc, out);
+        Controller::webSocket.textAll(out);
+    }
+   
+    //
    private:
     static void error(const char* msg) {
         Serial.println("Error " + String(msg));
@@ -143,11 +168,7 @@ class Controller {
         if (f == nullptr) {
             Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");
         } else {
-            if (Controller::getS("info").length() < 400) {
-                Controller::set("info", Controller::getS("info") + "; " + msg);
-            } else if (Controller::getS("info").length() < 450) {
-                Controller::set("info", Controller::getS("info") + "; ...");
-            }
+            Controller::set("info", msg);
         }
     }
 };

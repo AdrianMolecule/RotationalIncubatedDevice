@@ -60,11 +60,11 @@ class Model {
     }
     void initialize() {
         Serial.println("[MODEL] Initialize model by loading factory hardcoded model");
-        Helper::initialize(fields);
+        Config::initialize(fields);
     }
     void initializeSample() {
         Serial.println("[MODEL] Initialize just SAMPLE model by loading factory model");
-        Helper::initializeSample(fields);
+        Config::initializeSample(fields);
     }
     bool loadFromJson(const String& json) {
         return JsonWrapper::jsonToFields(json, fields);

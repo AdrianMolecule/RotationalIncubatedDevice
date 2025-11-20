@@ -272,7 +272,6 @@ int calculateFrequency() {
 
 void startStepperIfNotStarted() {
     if (tempIsStepperOn) {
-        // Serial.println("!!!! stepper already on");
         return;  // already on
     }
     Controller::log("Attempt to start the stepper");
@@ -284,7 +283,7 @@ void startStepperIfNotStarted() {
     for (int rpmin = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpmin <= Controller::getI("Rpm"); rpmin += 10) {
         if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
         float f = rpmToHertz(rpmin);
-        Controller::log("START stepper with frequency:%.0f and RPM:%d", f, rpmin);
+        Controller::log("Start stepper with frequency:%.0f and RPM:%d", f, rpmin);
         // delay(5);
         ledcSetup(STEPPER_PWM_CHANNEL, f, UNIVERSAL_PWM_RESOLUTION);
         // delay(5);
@@ -303,7 +302,7 @@ void stopStepperIfNotStopped() {
         // Serial.println("!!!! stepper already off");
         return;  // already on
     }
-    Controller::log("Stop stepper");
+    Controller::infoAlarm("Stop stepper");
     if (Controller::getI("MKSBoard")) {
         setupI2SOShiftDisableMotor();
     } else {                                                                          // custom PCB

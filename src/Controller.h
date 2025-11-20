@@ -74,6 +74,7 @@ class Controller {
     }
     //
     static void setBool(String name, bool value) {
+        Serial.println("Controller::set called for the name " + name + " with value:" + value);
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
             Controller::fatalErrorAlarm(("!!!!!Controller::setBool did not find an entry for the name[" + name + "]").c_str());

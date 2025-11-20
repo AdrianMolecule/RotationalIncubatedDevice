@@ -19,7 +19,7 @@
 #include "Microstepping.h"
 #include "MyMusic.h"
 #include "TimeManager.h"
-    void startStepperIfNotStarted();
+void startStepperIfNotStarted();
 void stopStepperIfNotStopped();
 void fanSetup();
 void fan(bool on);
@@ -189,67 +189,87 @@ class BackEnd {
     static inline int i = 0;
     static void loopBackend() {
         if (first) {
+            delay(10);
             Controller::log("[SYS] loopBackend Started   -----------------------------------------");
+            delay(10);
             first = false;
         }
+        // Controller::log("BBBBBB"); delay(10);
         processStepperStartOrStop();
         // Get temperature
         float temperature;
         float humidity;
         char tempCharBuffer[16];  // reused// A size of 16 is often safe for most floats.
         float dT = Controller::getI("desiredTemperature");
-        if (TEMPERATURE_DISPLAY) {
-            static char buffer[15];
-            if (!Controller::getBool("UseOneWireForTemperature")) {
-                snprintf(buffer, sizeof(buffer), "humidity=%.2f", humidity);
-            } else {
-                buffer[0] = '\0';  // ""
+        int ledBlueDuty = dT > 36 ? UNIVERSAL_MAX_DUTY_CYCLE / 10 : UNIVERSAL_MAX_DUTY_CYCLE;
+        ledcWrite(LED_BLUE_PWM_CHANNEL, ledBlueDuty);              // BLUE LED starts to signal we work at cool temp
+        if (((millis() - lastTempHumidityReadTime) / 2000) > 1) {  // every 2 seconds
+            getTemperature(temperature, humidity);
+            if (lastReadTemp != temperature) {  // avoid setting values that did not change
+                std::snprintf(tempCharBuffer, sizeof(tempCharBuffer), /* Maximum bytes to write*/ "%.2f", temperature);
+                Controller::set("currentTemperature", tempCharBuffer);
+                // Controller::webSocket.textAll(Controller::model.toJsonString());//immediate UI update
+                lastReadTemp = temperature;
             }
-            // Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
-        }
-        if (temperature < dT) {  // todo update the heater on off  faster
-            if (!Controller::getBool("currentHeaterOn")) {
-                Controller::log("Turning heater ON");
-                if (firstTimeTurnOnHeater) {
-                    firstTimeTurnOnHeater = false;
-                }
-                if (dT - temperature >= 2) {                                                                // high temp difference
-                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
+            lastTempHumidityReadTime = millis();
+            if (temperature > maxTemperature) {  // todo
+                maxTemperature = temperature;
+            }
+            if (TEMPERATURE_DISPLAY) {
+                static char buffer[15];
+                if (!Controller::getBool("UseOneWireForTemperature")) {
+                    snprintf(buffer, sizeof(buffer), "humidity=%.2f", humidity);
                 } else {
-                    heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                    buffer[0] = '\0';  // ""
                 }
+                Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
             }
-            // else{
-            //  do nothing let it heat
-            // }
-        } else {  // temp is high enough no need to heat
-            if (Controller::getBool("currentHeaterOn")) {
-                if (firstTimeReachDesiredTemperature) {
-                    if (Controller::getBool("TemperatureReachedMusicOn")) {
-                        Controller::infoAlarm("firstTimeReachDesiredTemperature");
+            if (temperature < dT) {  // todo update the heater on off  faster
+                if (!Controller::getBool("currentHeaterOn")) {
+                    Controller::log("Turning heater ON");
+                    if (firstTimeTurnOnHeater) {
+                        firstTimeTurnOnHeater = false;
                     }
-                    firstTimeReachDesiredTemperature = false;
+                    if (dT - temperature >= 2) {                                                                // high temp difference
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
+                    } else {
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                    }
                 }
-                heater(false);  // second arg is ignored when heater is turned off
-                Controller::setBool("currentHeaterOn", false);
+                // else{
+                //  do nothing let it heat
+                // }
+            } else {  // temp is high enough no need to heat
+                if (Controller::getBool("currentHeaterOn")) {
+                    if (firstTimeReachDesiredTemperature) {
+                        if (Controller::getBool("TemperatureReachedMusicOn")) {
+                            Controller::infoAlarm("firstTimeReachDesiredTemperature");
+                        }
+                        firstTimeReachDesiredTemperature = false;
+                    }
+                    heater(false);  // second arg is ignored when heater is turned off
+                    Controller::setBool("currentHeaterOn", false);
+                }
             }
-        }
-        if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
-            unsigned long nowTime = millis();
-            if (nowTime > lastHumidityAlertTime + 30000) {  // every half hour
-                Controller::warningAlarm("Humidity dropped to less then the minimal humidity of 60% hardcoded value");
-                lastHumidityAlertTime = nowTime;
+            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+                unsigned long nowTime = millis();
+                if (nowTime > lastHumidityAlertTime + 30000) {  // every half hour
+                    Controller::warningAlarm("Humidity dropped to less then the minimal humidity of 60% hardcoded value");
+                    lastHumidityAlertTime = nowTime;
+                }
             }
-        }
-        // Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
-        int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
-        if (r == 1) {  // 0 means not yet, -1 means not set or errors
-            Controller::infoAlarm("HeatingDateTimeWasReached reached", MyMusic::processFinished);
-            if (Controller::getS("alarmTurnsHeatingOff")) {
-                heater(false);
+            Field::logSets = false;
+            Controller::setQuiet("time", TimeManager::getCurrentTimeAsString());
+            Field::logSets = true;
+            int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
+            if (r == 1) {  // 0 means not yet, -1 means not set or errors
+                Controller::infoAlarm("HeatingDateTimeWasReached reached", MyMusic::processFinished);
+                if (Controller::getS("alarmTurnsHeatingOff")) {
+                    heater(false);
+                }
             }
+            Controller::webSocket.textAll(Controller::model.toJsonString());
         }
-        Controller::webSocket.textAll(Controller::model.toJsonString());
     }
 };
 // loose functions

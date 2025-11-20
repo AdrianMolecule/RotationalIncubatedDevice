@@ -93,6 +93,7 @@ enum Preference {  // for preferences
 DHTesp dhTempSensor;          // used in setup and readTemperature
 OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
 DallasTemperature tempSensor = DallasTemperature();
+
 class BackEnd {
    public:
     static inline unsigned long lastModelUpdateInSeconds = 0;
@@ -251,9 +252,8 @@ class BackEnd {
         Controller::webSocket.textAll(Controller::model.toJsonString());
     }
 };
-//
 // loose functions
-int calculateFrequency() {
+float calculateFrequency() {
     int freq = (int)(Controller::getI("Rpm") / 60 * Controller::getI("stepsPerRotation"));
     return freq;
 }
@@ -269,10 +269,10 @@ void startStepperIfNotStarted() {
     } else {                                                                         // my board
         digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // enable
     }
-    for (int rpm = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpm <= Controller::getI("Rpm"); rpm += 10) {
+    for (int rpmin = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpmin <= Controller::getI("Rpm"); rpmin += 10) {
         if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
-        double f = rpmToHertz(rpm);
-        Controller::log("START STEPPER with frequency:%d and RPM:%d", f, rpm);
+        float f = rpmToHertz(rpmin);
+        Controller::log("START stepper with frequency:%.0f and RPM:%d", f, rpmin);
         // delay(5);
         ledcSetup(STEPPER_PWM_CHANNEL, f, UNIVERSAL_PWM_RESOLUTION);
         // delay(5);
@@ -561,9 +561,9 @@ void heater(bool on, float duty) {
             Controller::setBool("currentHeaterOn", false);
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
-        Controller::log("Heater set to %d: ", on == 0 ? "0" : "1");
+        Controller::log("Heater set to %d: ", on);
         if (on) {
-            Controller::log(" with duty at:%.2f%%", ((duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100));
+            Controller::log("       with duty at:%.2f%%", ((duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100));
         }
     }
 }
@@ -587,10 +587,10 @@ void processStepperStartOrStop() {
     bool desired = Controller::getBool("StepperOn");
     if (Controller::getPresent("StepperOnOffSwitchInputPin")) {  // it's an end with the motor on signal so both the physical and soft on for motor to run
         int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();
-        if (stepperHardwareSwitchOnOffPosition == 0) {
+        if (stepperHardwareSwitchOnOffPosition == 0 && lastSteadyState != 0) {
             Controller::set("currentStepperOnOffSwitchPosition", "0");
         } else {
-            Controller::set("currentStepperOnOffSwitchPosition", "1");
+            if (lastSteadyState == 0) Controller::set("currentStepperOnOffSwitchPosition", "1");
         }
         // Serial.printf("stepperHardwareSwitchOnOffPosition:%d, tempIsStepperOn:%d,desired:%d\n", stepperHardwareSwitchOnOffPosition, tempIsStepperOn, desired);
         if (stepperHardwareSwitchOnOffPosition && desired) {

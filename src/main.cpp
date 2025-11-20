@@ -331,7 +331,7 @@ void serialLoop() {
 //
 void loop() {
     ArduinoOTA.handle();
-    //serialLoop();
+    serialLoop();
 }
 // --- OTA Setup Function ---
 void setupOTA() {

@@ -216,7 +216,7 @@ class BackEnd {
                 //Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
             }
             if (temperature < dT) {  // todo update the heater on off  faster
-                float mHDC=Controller::getI("maxHeaterDutyCycle")/100;
+                float mHDC=Controller::getI("maxHeaterDutyCycle")/100f;
                 if (!Controller::getBool("currentHeaterOn")) {
                     Controller::log("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
@@ -599,10 +599,8 @@ void processStepperStartOrStop() {
     bool desired = Controller::getBool("StepperOn");
     if (Controller::getPresent("StepperOnOffSwitchInputPin")) {  // it's an end with the motor on signal so both the physical and soft on for motor to run
         int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();
-        if (stepperHardwareSwitchOnOffPosition == 0 && lastSteadyState != 0) {
-            Controller::set("currentStepperOnOffSwitchPosition", "0");
-        } else {
-            if (lastSteadyState == 0) Controller::set("currentStepperOnOffSwitchPosition", "1");
+        if (stepperHardwareSwitchOnOffPosition != Controller::getBool("currentStepperOnOffSwitchPosition")) {
+            Controller::setBool("currentStepperOnOffSwitchPosition", stepperHardwareSwitchOnOffPosition);
         }
         // Serial.printf("stepperHardwareSwitchOnOffPosition:%d, tempIsStepperOn:%d,desired:%d\n", stepperHardwareSwitchOnOffPosition, tempIsStepperOn, desired);
         if (stepperHardwareSwitchOnOffPosition && desired) {

@@ -87,13 +87,11 @@ time_t TimeManager::dateTimeStringToTimeT(const char* dateTimeStr, const char* f
     struct tm timeinfo = {0};
     // strptime reads the string into the tm structure based on the format.
     if (strptime(dateTimeStr, format, &timeinfo) == NULL) {
-        Serial.printf("Error parsing date-time string: %s with format %s\n", dateTimeStr, format);
+        Controller::log("Error parsing date-time string: %s with format %s\n", dateTimeStr, format);
         return (time_t)-1;
-    }
-    // MODIFICATION: Set seconds to zero to normalize the comparison time.
-    timeinfo.tm_sec = 0;
-    // mktime converts the tm structure (local time) into a numeric time_t timestamp.
-    return mktime(&timeinfo);
+    }    
+    timeinfo.tm_sec = 0;// MODIFICATION: Set seconds to zero to normalize the comparison time.
+    return mktime(&timeinfo);// mktime converts the tm structure (local time) into a numeric time_t timestamp.
 }
 
 int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndTime) {

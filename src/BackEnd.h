@@ -1,15 +1,3 @@
-// #pragma once
-// #include <Arduino.h>
-
-// #include "DHTesp.h"  //for DHT temp sensor
-// // memory card https://www.mischianti.org/2021/03/28/how-to-use-sd-card-with-esp32-2/
-// //  include the SD library:
-// #include <DallasTemperature.h>
-// #include <FS.h>
-// #include <MyMusic.h>
-// #include <OneWire.h>
-// #include <SD.h>
-// #include <SPI.h>
 #pragma once
 #include <Arduino.h>
 
@@ -31,7 +19,7 @@
 #include "Microstepping.h"
 #include "MyMusic.h"
 #include "TimeManager.h"
-void startStepperIfNotStarted();
+    void startStepperIfNotStarted();
 void stopStepperIfNotStopped();
 void fanSetup();
 void fan(bool on);
@@ -52,7 +40,7 @@ void printDirectory(File dir, int numTabs);
 int getTemperature(float& temp, float& humid);
 void writeData(byte* bits);
 void processCommand();
-double rpmToHertz(float rpm);
+float rpmToHertz(float rpm);
 void setStepsPerRotation(int newStepsPerRotation);
 void stepperSetup();
 // end INCLUDES.h
@@ -252,7 +240,7 @@ class BackEnd {
                 lastHumidityAlertTime = nowTime;
             }
         }
-        Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
+        // Controller::setNoLog("time", TimeManager::getCurrentTimeAsString());
         int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
         if (r == 1) {  // 0 means not yet, -1 means not set or errors
             Controller::infoAlarm("HeatingDateTimeWasReached reached", MyMusic::processFinished);
@@ -315,7 +303,7 @@ void stopStepperIfNotStopped() {
     delay(100);
 }
 //
-double rpmToHertz(float rpm) {
+float rpmToHertz(float rpm) {
     return (int)(rpm / 60 * Controller::getI("stepsPerRotation"));  // in hertz
 }
 //
@@ -573,7 +561,7 @@ void heater(bool on, float duty) {
             Controller::setBool("currentHeaterOn", false);
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
-        Controller::log("Heater set to %d: ",on == 0 ? "0" : "1");
+        Controller::log("Heater set to %d: ", on == 0 ? "0" : "1");
         if (on) {
             Controller::log(" with duty at:%.2f%%", ((duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100));
         }

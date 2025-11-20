@@ -11,7 +11,6 @@
 class Controller {
    public:
     inline static Model model = Model{};
-
     inline static AsyncWebSocket webSocket = AsyncWebSocket{"/ws"};  // Declare the variable here (doesn't allocate memory yet)
 
     static int getI(String name) {
@@ -55,7 +54,7 @@ class Controller {
     }
     //
     static void set(String name, String value) {
-        Serial.println("Controller::setI called for the name " + name + " with value:" + value);
+        Serial.println("Controller::set called for the name " + name + " with value:" + value);
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
             Controller::fatalErrorAlarm(("!!!!!Controller::set did not find an entry for the name[" + name + "]").c_str());
@@ -63,12 +62,15 @@ class Controller {
             f->setValue(value);
     }
     //
-    static void setNoLog(String name, String value) {
+    static void setQuiet(String name, String value) {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
             Controller::fatalErrorAlarm(("!!!!!Controller::set did not find an entry for the name[" + name + "]").c_str());
-        } else
-            f->setValueQuiet(value);
+        } else{
+             Field::logSets = false;
+            f->setValue(value);
+             Field::logSets = true;
+        }
     }
     //
     static void setBool(String name, bool value) {
@@ -101,7 +103,7 @@ class Controller {
 
     static void infoAlarm(const char* message, Melody m = MyMusic::infoAlarmMusic) {
         MyMusic::play(m);
-        Controller::log(" Info Alarm %s",message);
+        Controller::log("Info Alarm %s", message);
     }
     //
     static void eraseInfo() {
@@ -119,16 +121,15 @@ class Controller {
         // End variadic arguments handling
         va_end(args);
         // Now proceed with your JSON serialization using the buffer
-        Serial.println(logMessageBuffer);
         JsonDocument doc;
         doc["action"] = "log";
-        // Use the C-style string buffer for the message
-        doc["msg"] = logMessageBuffer;
+        doc["msg"] = logMessageBuffer;// Use the C-style string buffer for the message
         String out;
         serializeJson(doc, out);
         Controller::webSocket.textAll(out);
+        Serial.println(logMessageBuffer);
     }
-   
+
     //
    private:
     static void error(const char* msg) {

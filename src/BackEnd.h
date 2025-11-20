@@ -99,9 +99,7 @@ class BackEnd {
     static inline unsigned long lastModelUpdateInSeconds = 0;
 
     static void setupBackend() {
-        Controller::log("~~~~~~~~~~~~~~~ setupBackend begin ~~~~~~~");
-        Controller::log("XXXXXXXXXXXXXX");
-        MyMusic::play(MyMusic::backend);
+        Controller::infoAlarm("~~~~~~~~~~~ setupBackend begin  ~~~~~~~", MyMusic::backend);
         tempSensor.setOneWire(&oneWire);
         stepperSetup();
         //  Declare pins as output:
@@ -174,12 +172,8 @@ class BackEnd {
         }
         // stepper
         Controller::log("stepper desiredRPM:%d", Controller::getI("Rpm"));
-        Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it
-        // Controller::log("Initial disabling of the stepper in setup");
-        //  stopStepperIfNotStopped();  // just to init the multiplexing pins
-        //  delay(300);
-        //  processStepperStartOrStop();
-        Controller::log("=======================   END Backend Setup. Version:%s  =======================", Controller::getS("version").c_str());
+        Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it to turn it on
+        Controller::infoAlarm("~~~~~~~~~~~ setupBackend END  ~~~~~~~", MyMusic::backendend);
         MyMusic::play(MyMusic::backendend);
     }
     /////////////
@@ -187,15 +181,11 @@ class BackEnd {
     static inline float lastReadTemp = -1;
     static inline bool TEMPERATURE_DISPLAY = true;
     //////
-    static inline int i = 0;
     static void loopBackend() {
         if (first) {
-            delay(10);
-            Controller::log("[SYS] loopBackend Started   -----------------------------------------");
-            delay(10);
+            Controller::infoAlarm("~~~~~~~~~~~ loop Backend START  ~~~~~~~", MyMusic::loop);
             first = false;
         }
-        // Controller::log("BBBBBB"); delay(10);
         processStepperStartOrStop();
         // Get temperature
         float temperature;
@@ -223,7 +213,7 @@ class BackEnd {
                 } else {
                     buffer[0] = '\0';  // ""
                 }
-                Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
+                //Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
             }
             if (temperature < dT) {  // todo update the heater on off  faster
                 if (!Controller::getBool("currentHeaterOn")) {

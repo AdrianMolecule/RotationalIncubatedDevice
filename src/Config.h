@@ -44,7 +44,7 @@ class Config {
         fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
         fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
         //
-        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "80", "Max Heater Duty Cycle- normally 80-100%");
+        fields.emplace_back(getNextIdStr(), "maxHeaterDutyCycle", "int", "85", "Max Heater Duty Cycle- normally 80-100%");
         fields.emplace_back(getNextIdStr(), "MKSBoard", "bool", "1", "MKSBoard");
         fields.emplace_back(getNextIdStr(), "StepperOnOffSwitchInputPin", "int", "36", "sets the pin to read the on-off-physical button if present ");                                  // yes 36 is for the big OS with MKS Input /*Sensor_VP SVP -*/
         fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode");  // maybe 26

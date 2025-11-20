@@ -93,8 +93,19 @@ String HtmlHelper::generateStatusPage(bool brief) {
 
             // Update only existing input values (preserve user edits)
             data.forEach(f => {
-                const el = document.querySelector("input[data-id='" + f.id + "']");
+                const el = document.querySelector("input[data-id='" + f.id + "']");                
                 if (el && document.activeElement !== el) {
+
+                    if (el.type === "checkbox") {
+                        const newChecked = (f.value === "1" || f.value === "true");
+                        if (el.checked !== newChecked) {
+                            el.checked = newChecked;
+                            el.style.transition = "background-color 0.8s";
+                            el.style.backgroundColor = "#fff3a0";
+                            setTimeout(() => { el.style.backgroundColor = ""; }, 800);
+                        }
+                        return;
+                    }
                     if (el.value !== f.value) {
                         el.value = f.value;
                         el.style.transition = "background-color 0.8s";

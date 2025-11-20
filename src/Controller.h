@@ -128,6 +128,7 @@ class Controller {
         serializeJson(doc, out);
         Controller::webSocket.textAll(out);
         Serial.println(logMessageBuffer);
+        delay(30);
     }
 
     //

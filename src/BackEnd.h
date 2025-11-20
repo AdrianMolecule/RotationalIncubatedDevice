@@ -80,7 +80,7 @@ unsigned long currentStartTime = millis();  // time since ESP power on in millis
 const int32_t SPIfreq = 40000;
 const int UNIVERSAL_PWM_RESOLUTION = 10;
 const float UNIVERSAL_MAX_DUTY_CYCLE = (int)(pow(2, UNIVERSAL_PWM_RESOLUTION) - 1);
-const float MODERATE_HEAT_POWER = 0.89;
+const float MODERATE_HEAT_POWER = 0.85;
 const float HALF_DUTY_CYCLE = UNIVERSAL_MAX_DUTY_CYCLE / 2;
 //
 bool tempIsStepperOn = false;  // the first operation in setup is to stop it
@@ -216,15 +216,16 @@ class BackEnd {
                 //Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
             }
             if (temperature < dT) {  // todo update the heater on off  faster
+                float mHDC=Controller::getI("maxHeaterDutyCycle")/100;
                 if (!Controller::getBool("currentHeaterOn")) {
                     Controller::log("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
                         firstTimeTurnOnHeater = false;
                     }
                     if (dT - temperature >= 2) {                                                                // high temp difference
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * Controller::getI("maxHeaterDutyCycle") / 100);  // Heater start
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * mHDC);                                          // Heater start
                     } else {
-                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * MODERATE_HEAT_POWER);
+                        heater(true, UNIVERSAL_MAX_DUTY_CYCLE * mHDC*MODERATE_HEAT_POWER);
                     }
                 }
                 // else{

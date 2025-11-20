@@ -322,7 +322,6 @@ String HtmlHelper::generateAdvancedPage() {
     )rawliteral";
     return html;
 }
-//
 String HtmlHelper::generateLogPage() {
     String html = HtmlHelper::generateMenu();
     html += "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Log</title>";
@@ -331,6 +330,7 @@ String HtmlHelper::generateLogPage() {
     html += "<h2>Program Log</h2>";
     html += "<textarea id='progLog' readonly></textarea><br>";
     html += "<button onclick='clearLog()'>Clear Log</button>";
+    html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button>";
 
     html += "<script>";
     html += "let progLog=[];";
@@ -343,6 +343,14 @@ String HtmlHelper::generateLogPage() {
 
     html += "const ws=new WebSocket('ws://'+location.hostname+'/ws');";
     html += "ws.onmessage=function(evt){try{const msg=JSON.parse(evt.data);if(msg.action==='log'){appendProgramLog(msg.msg);}}catch(e){console.log(e);}};";
+
+    // IDENTICAL reboot() from the Advanced page
+    html += "function reboot(){";
+    html += "if(confirm('Reboot the ESP32 now?')){";
+    html += "fetch('/reboot');";
+    html += "}";
+    html += "}";
+
     html += "</script>";
 
     html += "</body></html>";

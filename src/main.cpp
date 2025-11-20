@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "BackEnd.h"
+#include "Config.h"
 #include "Controller.h"
 #include "Field.h"
-#include "Config.h"
 #include "HtmlHelper.h"
 #include "JsonWrapper.h"
 #include "Model.h"
@@ -64,7 +64,9 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         Serial.println("got a uploadModel Ws action");
         String jsonStr = doc["json"] | "";
         if (JsonWrapper::checkJson(jsonStr)) {
+            Field::logSets = false;
             Controller::model.loadFromJson(jsonStr);
+            Field::logSets = true;
             Controller::model.saveToFile();
             Serial.println("[WEB] Uploaded new model via Advanced page");
         } else {
@@ -161,7 +163,9 @@ void setup() {
         }
     }
     spiffInit();
+    Field::logSets = false;
     bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    Field::logSets = true;
     if (!res) {
         Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
     }
@@ -170,14 +174,14 @@ void setup() {
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();
     Controller::set("bootTime", bootTime);
-    Serial.println("Controller::model object created and content is:" + Controller::model.toBriefJsonString());
-    Serial.println(Controller::Controller::webSocket.url());
+    Controller::log("Controller::model object created");// and content is:" + Controller::model.toBriefJsonString());
+    Controller::log(Controller::Controller::webSocket.url());
     server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateStatusPage(true)); });
     server.on("/extended", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html  charset=utf-8", HtmlHelper::generateStatusPage(false)); });
     server.on("/metadata", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateMetadataPage()); });
     server.on("/advanced", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateAdvancedPage()); });
-    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r)    { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
-    server.on("/log", HTTP_GET, [](AsyncWebServerRequest* r    )  { r->send(200, "text/html", HtmlHelper::generateLogPage()); });
+    server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
+    server.on("/log", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateLogPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
 
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
@@ -206,8 +210,8 @@ void loopBackendTask(void* param) {
 bool first = true;
 void serialLoop() {
     if (first) {
-        Serial.println("serial loop started");
-        Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
+        Controller::log("serial loop started");
+        //  Serial.println("in loop brief Controller::model via Controller is:" + Controller::model.toBriefJsonString());
         first = false;
     }
     if (Serial.available()) {
@@ -222,7 +226,9 @@ void serialLoop() {
             String jsonStr = line.substring(line.indexOf(' ') + 1);
             jsonStr.trim();
             if (JsonWrapper::checkJson(jsonStr)) {
+                Field::logSets = false;
                 Controller::model.loadFromJson(jsonStr);
+                Field::logSets = true;
                 Serial.println("Json replaced but not persisted !!!!!!!!!!!");
             } else {
                 Serial.println("Entered Json does not parse so Model remained unchanged");

@@ -85,21 +85,18 @@ class Controller {
     //
 
     static void fatalErrorAlarm(const char* message) {
-        Controller::log(" Fatal Error Alarm %s", message);
         MyMusic::play(MyMusic::fatalErrorAlarmMusic);
         Controller::error(message);
     }
     //
     static void errorAlarm(const char* message) {
-        Controller::log(" Error Alarm %s", message);
-        MyMusic::play(MyMusic::errorAlarmMusic);
         Controller::error(message);
+        MyMusic::play(MyMusic::errorAlarmMusic);
     }
 
     static void warningAlarm(const char* message) {
-        Controller::log(" Warning Alarm %s", message);
-        MyMusic::play(MyMusic::warningAlarmMusic);
         Controller::warning(message);
+        MyMusic::play(MyMusic::warningAlarmMusic);
     }
 
     static void infoAlarm(const char* message, Melody m = MyMusic::infoAlarmMusic) {
@@ -135,7 +132,7 @@ class Controller {
     //
    private:
     static void error(const char* msg) {
-        Serial.println("Error " + String(msg));
+        Controller::log(" Error %s", msg);
         const auto f = Controller::model.getByName("error");
         if (f == nullptr) {
             Serial.println("!!!! We cannot set the controller error because field \"error\" does not exist in the current model");
@@ -149,7 +146,7 @@ class Controller {
     }
     //
     static void warning(const char* msg) {
-        Serial.println("warning " + String(msg));
+        Controller::log("Warning %s", msg);
         const auto f = Controller::model.getByName("warning");
         if (f == nullptr) {
             Serial.println("!!!!! We cannot set the controller warning because field \"warning\" does not exist in the current model");

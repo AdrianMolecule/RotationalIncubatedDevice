@@ -103,7 +103,7 @@ class Controller {
 
     static void infoAlarm(const char* message, Melody m = MyMusic::infoAlarmMusic) {
         MyMusic::play(m);
-        Controller::log("Info Alarm %s", message);
+        Controller::log("Info Alarm: %s", message);
     }
     //
     static void eraseInfo() {
@@ -134,7 +134,7 @@ class Controller {
     //
    private:
     static void error(const char* msg) {
-        Controller::log(" Error %s", msg);
+        Controller::log("Error: %s", msg);
         const auto f = Controller::model.getByName("error");
         if (f == nullptr) {
             Serial.println("!!!! We cannot set the controller error because field \"error\" does not exist in the current model");
@@ -148,7 +148,7 @@ class Controller {
     }
     //
     static void warning(const char* msg) {
-        Controller::log("Warning %s", msg);
+        Controller::log("Warning: %s", msg);
         const auto f = Controller::model.getByName("warning");
         if (f == nullptr) {
             Serial.println("!!!!! We cannot set the controller warning because field \"warning\" does not exist in the current model");
@@ -162,7 +162,7 @@ class Controller {
     }
     //
     static void info(const char* msg) {
-        Serial.println("info " + String(msg));
+        Serial.println("info: " + String(msg));
         const auto f = Controller::model.getByName("info");
         if (f == nullptr) {
             Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");

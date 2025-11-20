@@ -5,9 +5,9 @@
 
 const String NOT_PRESENT = String("255");
 
-class Helper {
+class Config {
    public:
-    Helper() = default;
+    Config() = default;
     static inline int idCounter = 0;
     static const int initialSpeakerPin = 23;
     static void initialize(std::vector<Field>& fields) {

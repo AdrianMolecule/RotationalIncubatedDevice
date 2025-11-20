@@ -11,7 +11,7 @@ class MyMusic {
     static inline Melody validChoice = Melody(" (cgc*)**---");
     static inline Melody darthVader = Melody(" (ggg e,-. b,-- | g e,-. b,-- g+ (ddde,-.)* b,--  | g, e,-. b,-- g+ | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. g,-- | b, g-. b,-- d*+  | g* g-.g--  (g g,-. f-- (ed#)-- e-)* r- g#- c#* b#-.b-- |  (b,a)-- b,- r- e,- g, e,-. b,-- | g e,-. b,-- g+ |)<<_ ");
     static inline Melody wakeUp = Melody("c<<<<");
-    static inline Melody wifi = Melody("ag<<<<");
+    static inline Melody wifi = Melody("aga<<<<");
     static inline Melody backend = Melody("ff<<<<");
     static inline Melody backendend = Melody("g<<<<");
     static inline Melody loop = Melody("abf<<<<");

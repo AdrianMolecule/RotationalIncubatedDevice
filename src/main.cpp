@@ -127,7 +127,7 @@ void spiffInit() {
 void setup() {
     Serial.begin(115200);
     ledcSetup(SPEAKER_CHANNEL, 5000, 8);  // no need to declare pin as output
-    ledcAttachPin(Helper::initialSpeakerPin, SPEAKER_CHANNEL);
+    ledcAttachPin(Config::initialSpeakerPin, SPEAKER_CHANNEL);
     ledcWrite(SPEAKER_CHANNEL, 0);
     MyMusic::play(MyMusic::wakeUp);
     Serial.println("[SYS] Booting...");

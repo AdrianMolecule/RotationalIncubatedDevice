@@ -26,8 +26,8 @@
 #include <cstdio>  // Required for snprintf
 #include <vector>
 //
-#include "Controller.h"
 #include "Config.h"
+#include "Controller.h"
 #include "Microstepping.h"
 #include "MyMusic.h"
 #include "TimeManager.h"
@@ -216,7 +216,7 @@ class BackEnd {
             } else {
                 buffer[0] = '\0';  // ""
             }
-            //Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
+            // Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
         }
         if (temperature < dT) {  // todo update the heater on off  faster
             if (!Controller::getBool("currentHeaterOn")) {

@@ -1,3 +1,4 @@
+
 #pragma once
 #include <Arduino.h>
 
@@ -93,13 +94,13 @@ enum Preference {  // for preferences
 DHTesp dhTempSensor;          // used in setup and readTemperature
 OneWire oneWire = OneWire();  // GPIO where the DS18B20 is connected to. Used to be GPIO36 but not anymore
 DallasTemperature tempSensor = DallasTemperature();
-
 class BackEnd {
    public:
     static inline unsigned long lastModelUpdateInSeconds = 0;
 
     static void setupBackend() {
-        Controller::log("setupBackend begin ~~~~~~~");
+        Controller::log("~~~~~~~~~~~~~~~ setupBackend begin ~~~~~~~");
+        Controller::log("XXXXXXXXXXXXXX");
         MyMusic::play(MyMusic::backend);
         tempSensor.setOneWire(&oneWire);
         stepperSetup();
@@ -157,7 +158,7 @@ class BackEnd {
             Controller::log("No fan for this device");
         }
         // setupSDCard();
-        Controller::log("maxHeaterDutyCycle %i as percentage\n", Controller::getI("maxHeaterDutyCycle"));
+        Controller::log("maxHeaterDutyCycle %i%%", Controller::getI("maxHeaterDutyCycle"));
         float temperature;
         float humidity;
         if (Controller::getI("desiredTemperature") < 36) {
@@ -178,8 +179,8 @@ class BackEnd {
         //  stopStepperIfNotStopped();  // just to init the multiplexing pins
         //  delay(300);
         //  processStepperStartOrStop();
+        Controller::log("=======================   END Backend Setup. Version:%s  =======================", Controller::getS("version").c_str());
         MyMusic::play(MyMusic::backendend);
-        Controller::log("==============================   END Backend Setup. Version:%s ==============================", Controller::getS("version"));
     }
     /////////////
     static inline bool first = true;
@@ -272,8 +273,9 @@ class BackEnd {
         }
     }
 };
+//
 // loose functions
-float calculateFrequency() {
+int calculateFrequency() {
     int freq = (int)(Controller::getI("Rpm") / 60 * Controller::getI("stepsPerRotation"));
     return freq;
 }

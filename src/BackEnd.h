@@ -134,11 +134,11 @@ class BackEnd {
         }
         // temperature sensor
         if (Controller::getPresent("TempSensorPin")) {
+            Controller::infoAlarm("Temp Sensor present");
             if (!Controller::getI("UseOneWireForTemperature")) {
                 dhTempSensor.setup(Controller::getI("TempSensorPin"), DHTesp::DHT22);
                 if (dhTempSensor.getStatus() == DHTesp::ERROR_TIMEOUT) {
-                    Controller::warningAlarm("DHTesp::ERROR_TIMEOUT");
-                    Controller::log("No DHT22 found or not working properly!");
+                    Controller::warningAlarm("DHTesp::ERROR_TIMEOUT, No DHT22 found or not working properly!");
                 }
             } else {
                 oneWire.begin(Controller::getI("TempSensorPin"));
@@ -573,8 +573,7 @@ void heater(bool on, float duty) {
             Controller::setBool("currentHeaterOn", false);
     }
     if (Debug::LOG_HEATER_ON_OFF_STATE) {
-        Controller::log("Heater set to: ");
-        Controller::log(on == 0 ? "0" : "1");
+        Controller::log("Heater set to %d: ",on == 0 ? "0" : "1");
         if (on) {
             Controller::log(" with duty at:%.2f%%", ((duty / UNIVERSAL_MAX_DUTY_CYCLE) * 100));
         }

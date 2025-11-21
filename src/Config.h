@@ -3,10 +3,12 @@
 #include "Field.h"
 
 
-const String NOT_PRESENT = String("255");
-
 class Config {
-   public:
+    public:
+    static inline const char* NOT_PRESENT = "255";
+    static inline const char* VERSION = "Incubated Shaker 1.4";
+    static inline const char* DNS = "bios";
+    //
     Config() = default;
     static inline int idCounter = 0;
     static const int initialSpeakerPin = 23;
@@ -19,15 +21,15 @@ class Config {
         fields.emplace_back(getNextIdStr(), "info", "string", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);                // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
-        fields.emplace_back(getNextIdStr(), "StepperOn", "bool", "0", "Turns on off stepper", false, true, false);
+        fields.emplace_back(getNextIdStr(), "stepperOn", "bool", "0", "Turns stepper on off ", false, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
-        fields.emplace_back(getNextIdStr(), "Rpm", "float", "200", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
+        fields.emplace_back(getNextIdStr(), "rpm", "float", "250", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
         fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "Desired microstepping, only 200,400 ... 6400");
         fields.emplace_back(getNextIdStr(), "currentStepperOnOffSwitchPosition", "bool", "1", "Shows current StepperOnOffSwitch Position. Off means turn stepper Off. Ignored if no switch", true, false, false);
         fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
         fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
         // on offs read from UI and set on the board. They might be overridden by physical switches
-        fields.emplace_back(getNextIdStr(), "FanOn", "bool", "1", "Turns on off fan if capability exists", false, true);
+        fields.emplace_back(getNextIdStr(), "fanOn", "bool", "1", "Turns on off fan if capability exists", false, true);
         fields.emplace_back(getNextIdStr(), "HeaterDisabled", "bool", "0", "Disables heater even if current temp lower than desired temp");
         // pins
         fields.emplace_back(getNextIdStr(), "TempSensorPin", "uint8_t", "19", "TempSensorPin");  // we use one main pin for either dh or OneWIre and that is pin GPIO19/LCD_MISO on pin 1 of Expansion 2 connector
@@ -39,7 +41,7 @@ class Config {
         fields.emplace_back(getNextIdStr(), "I2SoClockPin", "uint8_t", "16", "I2SoClockPin");
         fields.emplace_back(getNextIdStr(), "I2SoLatchPin", "uint8_t", "17", "I2SoLatchPin");
         fields.emplace_back(getNextIdStr(), "SpeakerPin", "uint8_t", String(initialSpeakerPin), "SpeakerPin");  // String(32) or String(12) The physical interface on the board is a 2-pin connector typically labeled BZ or Buzzer, with one pin providing providing a GND (ground) connection.
-        fields.emplace_back(getNextIdStr(), "FanPin", "uint8_t", NOT_PRESENT, "FanPin");   // 33 is probably available but Probably will not work with any decent size fan because it's too weak. 33 LCD-RS currently pin 8 of expansion 1. see schematics in root
+        fields.emplace_back(getNextIdStr(), "fanPin", "uint8_t", NOT_PRESENT, "fanPin");   // 33 is probably available but Probably will not work with any decent size fan because it's too weak. 33 LCD-RS currently pin 8 of expansion 1. see schematics in root
         fields.emplace_back(getNextIdStr(), "LedPwmPin", "uint8_t", "2", "LedPwmPin");
         fields.emplace_back(getNextIdStr(), "PotentiometerPin", "uint8_t", NOT_PRESENT, "PotentiometerPin");
         fields.emplace_back(getNextIdStr(), "MemoryCsPin", "uint8_t", NOT_PRESENT, "MemoryCsPin");
@@ -50,15 +52,15 @@ class Config {
         fields.emplace_back(getNextIdStr(), "StepperOnOffSoftwareSwitchOutputPin", "uint8_t", NOT_PRESENT, "on my board we can control the on off by using ENABLEpin in output mode");  // maybe 26
         //
         fields.emplace_back(getNextIdStr(), "MostMusicOff", "bool", "0", "Most Music Off except for alarms");        // turns off all music except for errors, warnings, time reached and first time desired temperature reached
-        fields.emplace_back(getNextIdStr(), "TemperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all  music except for errors, warnings, time reached and first time desired temperature reached
+        fields.emplace_back(getNextIdStr(), "temperatureReachedMusicOn", "bool", "1", "TemperatureReachedMusicOn", false, true);  // turns off all  music except for errors, warnings, time reached and first time desired temperature reached
         //
         fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "0", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
 
-        fields.emplace_back(getNextIdStr(), "desiredHeatingEndTime", "string", "-1", "Heat cutoff time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
+        fields.emplace_back(getNextIdStr(), "desiredProcessEndTime", "string", "-1", "Process End Time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
         fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
         //
-        fields.emplace_back(getNextIdStr(), "version", "string", "Incubated Shaker 1.3", "Version", true, true, true);
+        fields.emplace_back(getNextIdStr(), "version", "string", VERSION, "Version", true, true, true);
     }
     //
     static void initializeSample(std::vector<Field>& fields) {

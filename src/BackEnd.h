@@ -99,7 +99,7 @@ class BackEnd {
     static inline unsigned long lastModelUpdateInSeconds = 0;
 
     static void setupBackend() {
-        Controller::infoAlarm("~~~~~~~~~~~ setupBackend begin  ~~~~~~~", MyMusic::backend);
+        Controller::infoAlarm("~~~~~~~~~~~ setup Backend START  ~~~~~~~", MyMusic::backend);
         tempSensor.setOneWire(&oneWire);
         stepperSetup();
         //  Declare pins as output:
@@ -112,7 +112,7 @@ class BackEnd {
         pinMode(Controller::getI("I2SoLatchPin"), OUTPUT);
         pinMode(Controller::getI("I2SoClockPin"), OUTPUT);
         pinMode(Controller::getI("I2SoDataPin"), OUTPUT);
-        pinMode(Controller::getI("FanPin"), OUTPUT);
+        pinMode(Controller::getI("fanPin"), OUTPUT);
         // //   speaker
         if (Controller::getPresent("SpeakerPin")) {
             ledcSetup(SPEAKER_CHANNEL, 5000, 8);
@@ -150,7 +150,7 @@ class BackEnd {
         } else {
             Controller::infoAlarm("No heater pin defined!");
         }
-        if (Controller::getPresent("FanPin")) {
+        if (Controller::getPresent("fanPin")) {
             fanSetup();
         } else {
             Controller::log("No fan for this device");
@@ -171,9 +171,9 @@ class BackEnd {
             Controller::log("startTemperature:%.2f, startHumidity %.2f", startTemperature, humidity);
         }
         // stepper
-        Controller::log("stepper desiredRPM:%d", Controller::getI("Rpm"));
-        Controller::setBool("StepperOn", true);  // the Stepper on is never saved so we manually initialize it to turn it on
-        Controller::infoAlarm("~~~~~~~~~~~ setupBackend END  ~~~~~~~", MyMusic::backendend);
+        Controller::log("stepper desiredRPM:%d", Controller::getI("rpm"));
+        Controller::setBool("stepperOn", true);  // the Stepper on is never saved so we manually initialize it to turn it on
+        Controller::infoAlarm("~~~~~~~~~~~ setup Backend END  ~~~~~~~", MyMusic::backendend);
         MyMusic::play(MyMusic::backendend);
     }
     /////////////
@@ -216,7 +216,7 @@ class BackEnd {
                 //Controller::log(" Current temp:%.2f, DesiredTemperature:%.2f, max temperature: %.2f, %s\n", temperature, dT, maxTemperature, buffer);
             }
             if (temperature < dT) {  // todo update the heater on off  faster
-                float mHDC=Controller::getI("maxHeaterDutyCycle")/100f;
+                float mHDC = (float)Controller::getI("maxHeaterDutyCycle") / 100;
                 if (!Controller::getBool("currentHeaterOn")) {
                     Controller::log("Turning heater ON");
                     if (firstTimeTurnOnHeater) {
@@ -234,7 +234,7 @@ class BackEnd {
             } else {  // temp is high enough no need to heat
                 if (Controller::getBool("currentHeaterOn")) {
                     if (firstTimeReachDesiredTemperature) {
-                        if (Controller::getBool("TemperatureReachedMusicOn")) {
+                        if (Controller::getBool("temperatureReachedMusicOn")) {
                             Controller::infoAlarm("firstTimeReachDesiredTemperature");
                         }
                         firstTimeReachDesiredTemperature = false;
@@ -253,10 +253,10 @@ class BackEnd {
             Field::logSets = false;
             Controller::setQuiet("time", TimeManager::getCurrentTimeAsString());
             Field::logSets = true;
-            int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredHeatingEndTime").c_str());
+            int r = TimeManager::checkIfHeatingDateTimeWasReached(Controller::getS("desiredProcessEndTime").c_str());
             if (r == 1) {  // 0 means not yet, -1 means not set or errors
                 Controller::infoAlarm("HeatingDateTimeWasReached reached", MyMusic::processFinished);
-                if (Controller::getS("alarmTurnsHeatingOff")) {
+                if (Controller::getBool("alarmTurnsHeatingOff")) {
                     heater(false);
                 }
             }
@@ -267,7 +267,7 @@ class BackEnd {
 //
 // loose functions
 int calculateFrequency() {
-    int freq = (int)(Controller::getI("Rpm") / 60 * Controller::getI("stepsPerRotation"));
+    int freq = (int)(Controller::getI("rpm") / 60 * Controller::getI("stepsPerRotation"));
     return freq;
 }
 
@@ -281,7 +281,8 @@ void startStepperIfNotStarted() {
     } else {                                                                         // my board
         digitalWrite(Controller::getI("StepperOnOffSoftwareSwitchOutputPin"), LOW);  // enable
     }
-    for (int rpmin = (Controller::getI("Rpm") > 80 ? 80 : Controller::getI("Rpm")); rpmin <= Controller::getI("Rpm"); rpmin += 10) {
+    int rp=Controller::getI("rpm");
+    for (int rpmin = (rp > 80 ? 80 : rp); rpmin <= rp; rpmin += 10) {
         if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
         float f = rpmToHertz(rpmin);
         Controller::log("Start stepper with frequency:%.0f and RPM:%d", f, rpmin);
@@ -292,9 +293,7 @@ void startStepperIfNotStarted() {
         // delay(5);
         ledcWrite(STEPPER_PWM_CHANNEL, HALF_DUTY_CYCLE);
         delay(500);
-        // Controller::setBool("StepperOn", true);
     }
-    // Controller::setBool("StepperOn", 1);
     tempIsStepperOn = true;
 }
 //
@@ -538,21 +537,21 @@ int readTurnOnStepperSwitch() {
 }
 //
 void fanSetup() {
-    pinMode(Controller::getI("FanPin"), OUTPUT);
+    pinMode(Controller::getI("fanPin"), OUTPUT);
     fan(true);
     delay(2000);
     fan(false);
 }
 //
 void fan(bool on) {
-    if (Controller::getI("FanOn") != on) {
-        Controller::setBool("FanOn", on);
+    if (Controller::getI("fanOn") != on) {
+        Controller::setBool("fanOn", on);
     }
     if (on) {
-        ledcAttachPin(Controller::getI("FanPin"), FAN_PWM_CHANNEL);
+        ledcAttachPin(Controller::getI("fanPin"), FAN_PWM_CHANNEL);
         ledcWrite(FAN_PWM_CHANNEL, (int)UNIVERSAL_MAX_DUTY_CYCLE);
     } else {
-        ledcDetachPin(Controller::getI("FanPin"));
+        ledcDetachPin(Controller::getI("fanPin"));
         ledcWrite(FAN_PWM_CHANNEL, 0);
     }
     if (Debug::LOG_FAN_ON_OFF_STATE) {
@@ -596,7 +595,7 @@ String formatTime(unsigned long time) {
 }
 //
 void processStepperStartOrStop() {
-    bool desired = Controller::getBool("StepperOn");
+    bool desired = Controller::getBool("stepperOn");
     if (Controller::getPresent("StepperOnOffSwitchInputPin")) {  // it's an end with the motor on signal so both the physical and soft on for motor to run
         int stepperHardwareSwitchOnOffPosition = readTurnOnStepperSwitch();
         if (stepperHardwareSwitchOnOffPosition != Controller::getBool("currentStepperOnOffSwitchPosition")) {
@@ -605,19 +604,19 @@ void processStepperStartOrStop() {
         // Serial.printf("stepperHardwareSwitchOnOffPosition:%d, tempIsStepperOn:%d,desired:%d\n", stepperHardwareSwitchOnOffPosition, tempIsStepperOn, desired);
         if (stepperHardwareSwitchOnOffPosition && desired) {
             startStepperIfNotStarted();
-            if (Controller::getPresent("FanPin")) fan(false);
+            if (Controller::getPresent("fanPin")) fan(false);
         } else {
             stopStepperIfNotStopped();
-            if (Controller::getPresent("FanPin")) fan(true);
+            if (Controller::getPresent("fanPin")) fan(true);
         }
     } else {  // NO SWITCH present
         if (desired) {
             startStepperIfNotStarted();
-            if (Controller::getPresent("FanPin")) fan(false);
+            if (Controller::getPresent("fanPin")) fan(false);
         } else {
             if (!desired) {
                 stopStepperIfNotStopped();
-                if (Controller::getPresent("FanPin")) fan(true);
+                if (Controller::getPresent("fanPin")) fan(true);
             }
         }
     }

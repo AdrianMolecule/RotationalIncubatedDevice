@@ -32,7 +32,7 @@ class Controller {
         }
         // Serial.println("!!!!!Controller::getPresent found value:" + model.getByName(name)->getValue());
         else
-            return !(f->getValue() == NOT_PRESENT);
+            return !(f->getValue() == Config::NOT_PRESENT);
     }
     //
     static bool getBool(String name) {
@@ -66,10 +66,10 @@ class Controller {
         const auto f = Controller::model.getByName(name);
         if (f == nullptr) {
             Controller::fatalErrorAlarm(("!!!!!Controller::set did not find an entry for the name[" + name + "]").c_str());
-        } else{
-             Field::logSets = false;
+        } else {
+            Field::logSets = false;
             f->setValue(value);
-             Field::logSets = true;
+            Field::logSets = true;
         }
     }
     //
@@ -96,12 +96,12 @@ class Controller {
         Controller::error(message);
         MyMusic::play(MyMusic::errorAlarmMusic);
     }
-
+    //
     static void warningAlarm(const char* message) {
         Controller::warning(message);
         MyMusic::play(MyMusic::warningAlarmMusic);
     }
-
+    //
     static void infoAlarm(const char* message, Melody m = MyMusic::infoAlarmMusic) {
         MyMusic::play(m);
         Controller::log("Info Alarm: %s", message);
@@ -124,12 +124,12 @@ class Controller {
         // Now proceed with your JSON serialization using the buffer
         JsonDocument doc;
         doc["action"] = "log";
-        doc["msg"] = logMessageBuffer;// Use the C-style string buffer for the message
+        doc["msg"] = logMessageBuffer;  // Use the C-style string buffer for the message
         String out;
         serializeJson(doc, out);
         Controller::webSocket.textAll(out);
         Serial.println(logMessageBuffer);
-        //delay(30);
+        // delay(30);
     }
 
     //
@@ -163,7 +163,7 @@ class Controller {
     }
     //
     static void info(const char* msg) {
-        Serial.println("info: " + String(msg));
+        Serial.printf("info: %s", msg);
         const auto f = Controller::model.getByName("info");
         if (f == nullptr) {
             Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");

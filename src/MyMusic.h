@@ -2,7 +2,7 @@
 #include <Melody.h>
 
 extern const uint8_t SPEAKER_CHANNEL;
-#define DNS "custom os"
+
 
 class MyMusic {
     public:

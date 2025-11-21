@@ -94,13 +94,13 @@ time_t TimeManager::dateTimeStringToTimeT(const char* dateTimeStr, const char* f
     return mktime(&timeinfo);// mktime converts the tm structure (local time) into a numeric time_t timestamp.
 }
 
-int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredHeatingEndTime) {
-    if (strcmp(desiredHeatingEndTime, "-1") == 0) {
+int TimeManager::checkIfHeatingDateTimeWasReached(const char* desiredProcessEndTime) {
+    if (strcmp(desiredProcessEndTime, "-1") == 0) {
         return -1;
     }
-    time_t endTime_unix = TimeManager::dateTimeStringToTimeT(desiredHeatingEndTime, "%Y-%m-%d %H:%M:%S");
+    time_t endTime_unix = TimeManager::dateTimeStringToTimeT(desiredProcessEndTime, "%Y-%m-%d %H:%M:%S");
     if (endTime_unix == -1) {
-        //Serial.printf("!!!!!! desiredHeatingEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredHeatingEndTime);
+        //Serial.printf("!!!!!! desiredProcessEndTime:%f in incorrect format, needs %Y-%m-%d %H:%M:%S\n", desiredProcessEndTime);
         return -1;  // something wrong
     }
     struct tm timeinfo;

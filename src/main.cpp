@@ -169,7 +169,7 @@ void setup() {
     if (!res) {
         Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
     }
-    Controller::status(wifiStatus + ", " + DNS);
+    Controller::status(wifiStatus + ", " + Config::DNS);
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();
@@ -342,9 +342,8 @@ void loop() {
 // --- OTA Setup Function ---
 void setupOTA() {
     // Use the same mDNS hostname
-    const char* hostname = DNS;
-    ArduinoOTA.setHostname(hostname);
-    Serial.printf("ArduinoOTA.setHostname done, %s %s:", hostname, ".local");
+    ArduinoOTA.setHostname(Config::DNS);
+    Serial.printf("ArduinoOTA.setHostname done, %s %s:", Config::DNS, ".local");
     // Optional: Set a password for security  // ArduinoOTA.setPassword("your_ota_password");
     // Configure callbacks for OTA events
     ArduinoOTA.onStart([]() {

@@ -183,6 +183,8 @@ void setup() {
     server.on("/chart", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateChartPage()); });
     server.on("/log", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(200, "text/html", HtmlHelper::generateLogPage()); });
     server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200,"text/plain","Rebooting...");delay(100);ESP.restart(); });
+    server.on("/version", HTTP_GET, [](AsyncWebServerRequest* r) {r->send(200, "text/html", HtmlHelper::generateVersionPage());
+    });
 
     Controller::webSocket.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
         if (type == WS_EVT_DATA) {

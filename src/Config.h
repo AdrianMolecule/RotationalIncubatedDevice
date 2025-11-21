@@ -6,8 +6,10 @@
 class Config {
     public:
     static inline const char* NOT_PRESENT = "255";
-    static inline const char* VERSION = "Incubated Shaker 1.4";
+    static inline const char* FIRMWARE_VERSION = "Incubated Shaker 1.4";
     static inline const char* DNS = "bios";
+    static constexpr const char* COMPILE_DATE = __DATE__;
+    static constexpr const char* COMPILE_TIME = __TIME__;
     //
     Config() = default;
     static inline int idCounter = 0;
@@ -59,8 +61,6 @@ class Config {
         fields.emplace_back(getNextIdStr(), "desiredProcessEndTime", "string", "-1", "Process End Time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
         fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
-        //
-        fields.emplace_back(getNextIdStr(), "version", "string", VERSION, "Version", true, true, true);
     }
     //
     static void initializeSample(std::vector<Field>& fields) {
@@ -70,6 +70,25 @@ class Config {
         fields.emplace_back(getNextIdStr(), "b", "int", "0", "b");
         fields.emplace_back(getNextIdStr(), "sample version", "string", "sample", "Version", true);
         // todo add currentStartTime
+    }
+//
+    static String getUptimeString() {
+        uint64_t ms = millis();
+        uint32_t sec = ms / 1000;
+        uint32_t min = sec / 60;
+        uint32_t hr = min / 60;
+        uint32_t day = hr / 24;
+        sec %= 60;
+        min %= 60;
+        hr %= 24;
+        char buf[64];
+        sprintf(buf, "%u d %02u:%02u:%02u", day, hr, min, sec);
+        return String(buf);
+    }
+    static String getVersionString() {
+        char buf[64];
+        sprintf(buf, "%s, url:%s%s", FIRMWARE_VERSION, DNS, ".local");
+        return String(buf);
     }
 
    private:

@@ -9,8 +9,9 @@ String HtmlHelper::generateMenu() {
            "<a href='/metadata'>Metadata</a> | "
            "<a href='/advanced'>Advanced</a> | "
            "<a href='/chart'>Chart</a> | "
-           "<a href='/log'>Log</a> | "
-           "</p>";
+           "<a href='/log'>Log</a> | " 
+           "<a href=\"/version\">Version</a> |"
+    "</p>";
 }
 
 String HtmlHelper::generateStatusPage(bool brief) {
@@ -473,5 +474,42 @@ String HtmlHelper::generateChartPage() {
         <button onclick="clearChartStorage()" style="margin-top:10px;">Clear Saved Data</button>
     )rawliteral";
 
+    return html;
+}
+//
+String HtmlHelper::generateVersionPage() {
+    String html = HtmlHelper::generateMenu();
+    html += "<h2>Firmware Version</h2>";
+    html += "<pre style='background:#eee;padding:10px;border:1px solid #ccc;'>";
+
+    html += "Version: ";
+    html += Config::getVersionString();
+    html += "\nCompiled: ";
+    html += Config::COMPILE_DATE;
+    html += " ";
+    html += Config::COMPILE_TIME;
+
+    html += "\n\nUptime: ";
+    html += Config::getUptimeString();
+
+    html += "\n\nDevice Info:";
+    html += "\nChip model: ";
+    html += ESP.getChipModel();
+    html += "\nChip revision: ";
+    html += ESP.getChipRevision();
+    html += "\nCPU cores: ";
+    html += ESP.getChipCores();
+    html += "\nCPU freq: ";
+    html += ESP.getCpuFreqMHz();
+    html += " MHz";
+    html += "\nFlash size: ";
+    html += ESP.getFlashChipSize() / 1024 / 1024;
+    html += " MB";
+    html += "\nHeap free: ";
+    html += ESP.getFreeHeap();
+    html += "\nSDK version: ";
+    html += ESP.getSdkVersion();
+
+    html += "</pre>";
     return html;
 }

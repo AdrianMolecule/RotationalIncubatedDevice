@@ -9,4 +9,5 @@ class HtmlHelper {
     static String generateAdvancedPage();
     static String generateChartPage();
     static String generateLogPage();
+    static String generateVersionPage();
     };

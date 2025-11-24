@@ -28,7 +28,7 @@ class Config {
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "currentHeaterOn", "bool", "0", "Shows current/desired heater state controlled by the device but overridden by HeaterDisabled ", true, true, false);
         fields.emplace_back(getNextIdStr(), "rpm", "float", "80", "desired RPM. You need to restart stepper to achieve this RPM.", false, true);
-        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "200", "Desired microstepping, only 200,400 ... 6400");
+        fields.emplace_back(getNextIdStr(), "stepsPerRotation", "int", "800", "Desired microstepping, only 200,400 ... 6400");
         fields.emplace_back(getNextIdStr(), "time", "string", "no time", "Shows device current time/date", true, true, false);  // readonly isSHown, is not persisted
         fields.emplace_back(getNextIdStr(), "bootTime", "string", "0", "Device startup time", true, true, false);
         // on offs read from UI and set on the board. They might be overridden by physical switches

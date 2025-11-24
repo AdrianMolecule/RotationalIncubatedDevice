@@ -6,6 +6,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
+#include <WiFiProvisioner.h>
 
 #include <vector>
 
@@ -126,6 +127,7 @@ void spiffInit() {
 //
 void setup() {
     Serial.begin(115200);
+    //newWiFiCredentials();
     ledcSetup(SPEAKER_CHANNEL, 5000, 8);  // no need to declare pin as output
     ledcAttachPin(Config::initialSpeakerPin, SPEAKER_CHANNEL);
     ledcWrite(SPEAKER_CHANNEL, 0);
@@ -148,7 +150,7 @@ void setup() {
         setupOTA();
     } else {
         wifiStatus = "[WiFi] Connection failed!";
-        Controller::fatalErrorAlarm(wifiStatus.c_str());
+        Serial.println(wifiStatus.c_str());// we cannot use fatalErrorAlarm
     }
     String when;
     if (Serial.available()) {
@@ -164,9 +166,9 @@ void setup() {
     }
     spiffInit();
     Field::logSets = false;
-    bool res = Controller::model.load();  // check for emergency reinitialize if we messed up the model
+    bool result = Controller::model.load();  // check for emergency reinitialize if we messed up the model
     Field::logSets = true;
-    if (!res) {
+    if (!result) {
         Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
     }
     Controller::status(wifiStatus + ", " + Config::DNS);
@@ -199,6 +201,22 @@ void setup() {
     BackEnd::setupBackend();
     xTaskCreate(loopBackendTask, "LoopBackend", 8192, nullptr, 1, nullptr);
     Serial.println("[SYS] Main Setup complete.");
+}
+void newWiFiCredentials() {
+    WiFiProvisioner provisioner;
+    provisioner.getConfig().SHOW_INPUT_FIELD = false;  // No additional input field
+    provisioner.getConfig().SHOW_RESET_FIELD = false;  // No reset field
+    // Set the success callback
+    provisioner.onSuccess(
+        [](const char* ssid, const char* password, const char* input) {
+            Serial.printf("Provisioning successful! Connected to SSID: %s\n", ssid);
+            if (password) {
+                Serial.printf("Password: %s\n", password);
+            }
+        });
+
+    // Start provisioning
+    provisioner.startProvisioning();
 }
 //
 void loopBackendTask(void* param) {
@@ -345,7 +363,7 @@ void loop() {
 void setupOTA() {
     // Use the same mDNS hostname
     ArduinoOTA.setHostname(Config::DNS);
-    Serial.printf("ArduinoOTA.setHostname done, %s %s:", Config::DNS, ".local");
+    Serial.printf("ArduinoOTA.setHostname done, %s%s:", Config::DNS, ".local");
     // Optional: Set a password for security  // ArduinoOTA.setPassword("your_ota_password");
     // Configure callbacks for OTA events
     ArduinoOTA.onStart([]() {

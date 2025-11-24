@@ -3,15 +3,18 @@
 #include "Controller.h"
 
 String HtmlHelper::generateMenu() {
-    return "<p>"
-           "<a href='/'>Status</a> | "
-           "<a href='/extended'>Extended</a> | "
-           "<a href='/metadata'>Metadata</a> | "
-           "<a href='/advanced'>Advanced</a> | "
-           "<a href='/chart'>Chart</a> | "
-           "<a href='/log'>Log</a> | " 
-           "<a href=\"/version\">Version</a> |"
-    "</p>";
+    String html="<head><title>";
+    html+=Config::getVersionString();
+    html+="</title ></head><p>"
+        "<a href='/'>Status</a> | "
+        "<a href='/extended'>Extended</a> | "
+        "<a href='/metadata'>Metadata</a> | "
+        "<a href='/advanced'>Advanced</a> | "
+        "<a href='/chart'>Chart</a> | "
+        "<a href='/log'>Log</a> | "
+        "<a href=\"/version\">Version</a> |"
+        "</p>";
+        return html;
 }
 
 String HtmlHelper::generateStatusPage(bool brief) {
@@ -509,7 +512,7 @@ String HtmlHelper::generateVersionPage() {
     html += ESP.getFreeHeap();
     html += "\nSDK version: ";
     html += ESP.getSdkVersion();
-
+    html += "\nIn the Serial:  will initialize model with hardcoded values from Config.h and @ will return after estabishing a Wifi connection to avoid repeated reboots and allow new code upload over OTA.";
     html += "</pre>";
     return html;
-}
+    }

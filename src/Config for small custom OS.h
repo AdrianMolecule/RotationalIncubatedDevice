@@ -8,7 +8,7 @@ class Config {
     static inline const char* NOT_PRESENT = "255";
     static inline const int NOT_PRESENT_INT = 255;
     static inline const char* FIRMWARE_VERSION = "os-Small custom PCB Orbital Shaker 1.3";
-    static inline const char* DNS = "bioos";  // 192.168.0.193
+    static inline const char* DNS = "bioos";  // 192.168.0.192
     static constexpr const char* COMPILE_DATE = __DATE__;
     static constexpr const char* COMPILE_TIME = __TIME__;
     //

@@ -13,15 +13,20 @@ class Config {
     static constexpr const char* COMPILE_TIME = __TIME__;
     //
     Config() = default;
+    static void initializeHardcodedFields(std::vector<Field>& fields) {
+        fields.clear();
+        fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);         // MANDATORY
+        fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);    // MANDATORY
+        fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
+    };
     static inline int idCounter = 0;
     static const int initialSpeakerPin = 23;
     static void initialize(std::vector<Field>& fields) {
-        fields.clear();
+        initializeHardcodedFields(fields);
         // desired or set values AT this point for Tube rotator
         fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);         // MANDATORY
         fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);    // MANDATORY
         fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
-        fields.emplace_back(getNextIdStr(), "info", "string", "", "Info Message", true /*RO*/, true /*shown */, false /*not persisted */);                // MANDATORY
         fields.emplace_back(getNextIdStr(), "desiredTemperature", "float", "37", "Desired Temperature", false, true);
         fields.emplace_back(getNextIdStr(), "currentTemperature", "float", "-1", "Current Temperature", true, true, false);
         fields.emplace_back(getNextIdStr(), "stepperOn", "bool", "0", "Turns stepper on off ", false, true, false);

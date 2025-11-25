@@ -57,15 +57,17 @@ class Model {
                 break;
             }
         }
+    }//
+    void preSeed() {
+        Serial.println("[MODEL] preseed harcoded fields");
+        Config::initializeHardcodedFields(fields);
     }
+    //
     void initialize() {
         Serial.println("[MODEL] Initialize model by loading factory hardcoded model");
         Config::initialize(fields);
     }
-    void initializeSample() {
-        Serial.println("[MODEL] Initialize just SAMPLE model by loading factory model");
-        Config::initializeSample(fields);
-    }
+    //
     bool loadFromJson(const String& json) {
         return JsonWrapper::jsonToFields(json, fields);
     }

@@ -128,6 +128,7 @@ void spiffInit() {
 void setup() {
     Serial.begin(115200);
     //newWiFiCredentials();
+    Controller::model.preSeed();
     ledcSetup(SPEAKER_CHANNEL, 5000, 8);  // no need to declare pin as output
     ledcAttachPin(Config::initialSpeakerPin, SPEAKER_CHANNEL);
     ledcWrite(SPEAKER_CHANNEL, 0);
@@ -150,9 +151,9 @@ void setup() {
         setupOTA();
     } else {
         wifiStatus = "[WiFi] Connection failed!";
-        Serial.println(wifiStatus.c_str());// we cannot use fatalErrorAlarm
+        Controller::fatalErrorAlarm(wifiStatus.c_str()); 
     }
-    String when;
+    String when;    
     if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         if (line.startsWith("!")) {
@@ -171,7 +172,6 @@ void setup() {
     if (!result) {
         Controller::fatalErrorAlarm("[FS] Could not load the persisted model so we initialized from code.");
     }
-    Controller::status(wifiStatus + ", " + Config::DNS);
     // Initialize and get the time from NTP server
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     const char* bootTime = TimeManager::getBootTimeAsString();

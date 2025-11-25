@@ -94,7 +94,7 @@ bool JsonWrapper::jsonToFields(const String& jsonStr, std::vector<Field>& fields
         return false;
     }
     JsonArray arr = doc.as<JsonArray>();
-    fields.clear();
+    //fields.clear();
     for (JsonObject obj : arr) {
         Field f;
         f.setId(obj["id"] | "");

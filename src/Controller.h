@@ -82,11 +82,6 @@ class Controller {
             f->setValue(value ? "1" : "0");
     }
     //
-    static void status(String msg) {
-        Controller::set("status", Controller::getS("status") + "; " + msg);
-    }
-    //
-
     static void fatalErrorAlarm(const char* message) {
         MyMusic::play(MyMusic::fatalErrorAlarmMusic);
         Controller::error(message);
@@ -129,9 +124,7 @@ class Controller {
         serializeJson(doc, out);
         Controller::webSocket.textAll(out);
         Serial.println(logMessageBuffer);
-        // delay(30);
     }
-
     //
    private:
     static void error(const char* msg) {

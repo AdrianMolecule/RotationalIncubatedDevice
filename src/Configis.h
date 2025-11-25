@@ -15,7 +15,6 @@ class Config {
     Config() = default;
     static void initializeHardcodedFields(std::vector<Field>& fields) {
         fields.clear();
-        fields.emplace_back(getNextIdStr(), "status", "string", "", "Status for device", true /*RO*/, true /*shown */, false /*not persisted */);         // MANDATORY
         fields.emplace_back(getNextIdStr(), "error", "string", "", "Error status for device", true /*RO*/, true /*shown */, false /*not persisted */);    // MANDATORY
         fields.emplace_back(getNextIdStr(), "warning", "string", "", "warnings for the device", true /*RO*/, true /*shown */, false /*not persisted */);  // MANDATORY
     };

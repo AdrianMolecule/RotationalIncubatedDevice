@@ -88,10 +88,8 @@ String HtmlHelper::generateStatusPage(bool brief) {
     String html = HtmlHelper::generateMenu();
     std::vector<Field> fi;
     if (brief) {
-        html += "<h2>The Status</h2>";
         fi = Controller::model.getScreenFields();
     } else {
-        html += "<h2>Extended Page</h2>";
         fi = Controller::model.getFields();
     }
 
@@ -197,8 +195,7 @@ String HtmlHelper::generateStatusPage(bool brief) {
 
 String HtmlHelper::generateMetadataPage() {
     String html = HtmlHelper::generateMenu();
-    html += "<h2>Metadata</h2>";
-    html += "<table border=1><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
+    html += "<table border=1><  thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Value</th><th>Description</th><th>ReadOnly</th><th>IsShown</th><th>IsPersisted</th><th>Reorder</th><th>Delete</th></tr></thead><tbody id='meta-body'>";
     for (auto& f : Controller::model.getFields()) {
         html += "<tr>";
         html += "<td>" + f.getId() + "</td>";

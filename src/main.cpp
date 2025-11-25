@@ -38,21 +38,18 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
                 Controller::model.saveToFile();
             }
             Controller::webSocket.textAll(Controller::model.toJsonString());
-            Controller::eraseInfo();
         }
     } else if (action == "delete") {
         String id = doc["id"] | "";
         if (Controller::model.remove(id)) {
             Controller::model.saveToFile();
             Controller::webSocket.textAll(Controller::model.toJsonString());
-            Controller::eraseInfo();
         }
     } else if (action == "moveUp" || action == "moveDown") {
         String id = doc["id"] | "";
         Controller::model.reorder(id, action == "moveUp");
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
-        Controller::eraseInfo();
     } else if (action == "add") {
         JsonObject fld = doc["field"].as<JsonObject>();
         Field f;
@@ -60,7 +57,6 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
         Controller::model.add(f);
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
-        Controller::eraseInfo();
     } else if (action == "uploadModel") {
         Serial.println("got a uploadModel Ws action");
         String jsonStr = doc["json"] | "";
@@ -74,26 +70,22 @@ void handleWebSocketMessage(String msg) {  // from the UI to board
             Serial.println("[WEB] Invalid JSON upload ignored");
         }
         Controller::webSocket.textAll(Controller::model.toJsonString());
-        Controller::eraseInfo();
     } else if (action == "factoryReset") {
         Serial.println("[WEB] Factory reset requested from Advanced page");
         Controller::model.initialize();
         Controller::model.saveToFile();
         Controller::webSocket.textAll(Controller::model.toJsonString());
-        Controller::eraseInfo();
     } else if (action == "showFactoryModel") {
         Serial.println("[WEB] Showing factory default model (object view)");
         Model temp;
         temp.initialize();  // create default fields
         Controller::webSocket.textAll(temp.toJsonString());
-        Controller::eraseInfo();
     } else if (action == "showFactoryJson") {
         Serial.println("[WEB] Showing factory default model (raw JSON view)");
         Model temp;
         temp.initialize();
         String json = temp.toJsonString();
         Controller::webSocket.textAll(json);
-        Controller::eraseInfo();
     }
 }
 

@@ -102,10 +102,6 @@ class Controller {
         Controller::log("Info Alarm: %s", message);
     }
     //
-    static void eraseInfo() {
-        Controller::set("info", "");
-    }
-    //
     static void log(const char* format, ...) {  // Changed from const String& msg to const char* format
         const size_t BUFFER_SIZE = 200;
         char logMessageBuffer[BUFFER_SIZE];
@@ -152,16 +148,6 @@ class Controller {
             } else if (Controller::getS("warning").length() < 450) {
                 Controller::set("warning", Controller::getS("warning") + "; ...");
             }
-        }
-    }
-    //
-    static void info(const char* msg) {
-        Serial.printf("info: %s", msg);
-        const auto f = Controller::model.getByName("info");
-        if (f == nullptr) {
-            Serial.println("!!!!!! We cannot set the controller info because field \"info\" does not exist in the current model");
-        } else {
-            Controller::set("info", msg);
         }
     }
 };

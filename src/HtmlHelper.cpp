@@ -17,6 +17,73 @@ String HtmlHelper::generateMenu() {
         return html;
 }
 
+String HtmlHelper::generateLogBlock() {
+    String html;    
+
+    html += R"rawliteral(
+    <h3>Program Log</h3>
+    <textarea id='progLog' readonly style='width:100%;height:300px;white-space:pre-wrap;'></textarea><br>
+    <button onclick='clearLog()'>Clear Log</button>
+    <button onclick='reboot()' style="background-color:#333;color:white;">Reboot ESP32</button>
+
+    <script>
+    // --- Inline Log Block (Extended Page) ---
+    let progLog = [];
+    if (sessionStorage.getItem("progLog")) {
+        progLog = JSON.parse(sessionStorage.getItem("progLog"));
+    }
+
+    function drawLog() {
+        const el = document.getElementById("progLog");
+        if (!el) return;
+        el.value = progLog.join("\n");
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function appendProgramLog(msg) {
+        const ts = new Date().toLocaleTimeString();
+        const line = "[" + ts + "] " + msg;
+        progLog.push(line);
+        if (progLog.length > 2000) progLog.shift();
+        sessionStorage.setItem("progLog", JSON.stringify(progLog));
+        drawLog();
+    }
+
+    function clearLog() {
+        progLog = [];
+        sessionStorage.setItem("progLog", JSON.stringify([]));
+        drawLog();
+    }
+
+    drawLog();
+
+    // Reuse SAME websocket that the extended page already opened
+    if (typeof ws !== "undefined") {
+        ws.addEventListener("message", evt => {
+            try {
+                const msg = JSON.parse(evt.data);
+                if (msg.action === "log") {
+                    appendProgramLog(msg.msg);
+                }
+            } catch (e) {
+                console.log(e);
+            }
+        });
+    }
+
+    // Reuse reboot() from parent page if available
+    if (typeof reboot === "undefined") {
+        function reboot() {
+            if (confirm("Reboot ESP32 now?"))
+                fetch("/reboot");
+        }
+    }
+    </script>
+    )rawliteral";
+
+    return html;
+}
+
 String HtmlHelper::generateStatusPage(bool brief) {
     String html = HtmlHelper::generateMenu();
     std::vector<Field> fi;
@@ -116,63 +183,15 @@ String HtmlHelper::generateStatusPage(bool brief) {
                         el.style.backgroundColor = "#fff3a0";
                         setTimeout(() => { el.style.backgroundColor = ""; }, 800);
                     }
-                }
-                // NEW: Add only NEW info entries to the client log + clear textbox
-                if (f.name === "info" && f.value) {
-                    let parts = f.value.split(";");
-                    let newest = parts[parts.length - 1].trim();
-                    if (newest.length > 0) {
-                        if (infoLog.length === 0 || !infoLog[infoLog.length - 1].endsWith(newest)) {
-                            addLogEntry(newest);
-
-                            // Clear the info input textbox on the page
-                            const infoInput = document.querySelector("input[data-id='" + f.id + "']");
-                            if (infoInput && document.activeElement !== infoInput) {
-                                infoInput.value = "";
-                                infoInput.style.backgroundColor = "#eee";          // visual feedback
-                                setTimeout(() => { infoInput.style.backgroundColor = ""; }, 300);
-                            }
-                        }
-                    }
-                }                    
+                }            
             });
         } catch(e) {
             console.error("WS update error:", e);
         }
     };
-        // --- CLIENT-SIDE INFO LOG ---
-    // Load previous log if exists
-    let infoLog = [];
-    // Restore from session (survives refresh, but not browser restart)
-    if (sessionStorage.getItem("infoLog")) {
-        try { infoLog = JSON.parse(sessionStorage.getItem("infoLog")); }
-        catch(e) { infoLog = []; }
-    }
-    // Create the log UI
-    let logBox = document.createElement("textarea");
-    logBox.id = "clientLog";
-    logBox.style.width = "100%";
-    logBox.style.height = "200px";
-    logBox.style.marginTop = "20px";
-    logBox.style.whiteSpace = "pre-wrap";
-    logBox.readOnly = true;
-    logBox.value = infoLog.join("\n");
-    document.body.appendChild(logBox);
-    // Function to add a new entry
-    function addLogEntry(msg) {
-        const ts = new Date().toLocaleTimeString();
-        const line = `[${ts}] ${msg}`;
-        infoLog.push(line);
-
-        // limit growth to avoid browser bloat
-        if (infoLog.length > 1000)
-            infoLog.shift();
-        sessionStorage.setItem("infoLog", JSON.stringify(infoLog));
-        document.getElementById("clientLog").value = infoLog.join("\n");
-    }
     </script>
     )rawliteral";
-
+    html += HtmlHelper::generateLogBlock();  // append inline log UI
     return html;
 }
 
@@ -339,6 +358,7 @@ String HtmlHelper::generateAdvancedPage() {
 }
 String HtmlHelper::generateLogPage() {
     String html = HtmlHelper::generateMenu();
+
     html += "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Log</title>";
     html += "<style>body{font-family:sans-serif;margin:10px;}textarea{width:100%;height:400px;white-space:pre-wrap;}button{margin-top:10px;padding:6px 14px;}#topbar{margin-bottom:10px;}a{margin-right:15px;}</style>";
     html += "</head><body>";
@@ -347,29 +367,53 @@ String HtmlHelper::generateLogPage() {
     html += "<button onclick='clearLog()'>Clear Log</button>";
     html += "<button onclick='reboot()' style=\"background-color:#333;color:white;\">Reboot ESP32</button>";
 
-    html += "<script>";
-    html += "let progLog=[];";
-    html += "if(sessionStorage.getItem('progLog')){progLog=JSON.parse(sessionStorage.getItem('progLog'));}";
-    html += "function drawLog(){const el=document.getElementById('progLog');el.value=progLog.join('\\n');el.scrollTop=el.scrollHeight;}";
-    html += "function appendProgramLog(msg){const ts=new Date().toLocaleTimeString();const line='['+ts+'] '+msg;progLog.push(line);if(progLog.length>2000)progLog.shift();sessionStorage.setItem('progLog',JSON.stringify(progLog));drawLog();}";
-    html += "function clearLog(){progLog=[];sessionStorage.setItem('progLog','[]');drawLog();}";
+    html += R"rawliteral(
+    <script>
+    let progLog=[];
+    if(sessionStorage.getItem('progLog')){
+        progLog=JSON.parse(sessionStorage.getItem('progLog'));
+    }
 
-    html += "drawLog();";
+    function drawLog(){
+        const el=document.getElementById('progLog');
+        el.value=progLog.join('\n');
+        el.scrollTop=el.scrollHeight;
+    }
 
-    html += "const ws=new WebSocket('ws://'+location.hostname+'/ws');";
-    html += "ws.onmessage=function(evt){try{const msg=JSON.parse(evt.data);if(msg.action==='log'){appendProgramLog(msg.msg);}}catch(e){console.log(e);}};";
+    function appendProgramLog(msg){
+        const ts=new Date().toLocaleTimeString();
+        const line='['+ts+'] '+msg;
+        progLog.push(line);
+        if(progLog.length>2000)progLog.shift();
+        sessionStorage.setItem('progLog',JSON.stringify(progLog));
+        drawLog();
+    }
 
-    // IDENTICAL reboot() from the Advanced page
-    html += "function reboot(){";
-    html += "if(confirm('Reboot the ESP32 now?')){";
-    html += "fetch('/reboot');";
-    html += "}";
-    html += "}";
+    function clearLog(){
+        progLog=[];
+        sessionStorage.setItem('progLog','[]');
+        drawLog();
+    }
 
-    html += "</script>";
+    drawLog();
+
+    const ws=new WebSocket('ws://'+location.hostname+'/ws');
+    ws.onmessage=function(evt){
+        try{
+            const msg=JSON.parse(evt.data);
+            if(msg.action==='log'){
+                appendProgramLog(msg.msg);
+            }
+        }catch(e){console.log(e);}
+    };
+
+    function reboot(){
+        if(confirm('Reboot ESP32 now?')) fetch('/reboot');
+    }
+    </script>
+    )rawliteral";
 
     html += "</body></html>";
-
     return html;
 }
 
@@ -476,7 +520,7 @@ String HtmlHelper::generateChartPage() {
         </script>
         <button onclick="clearChartStorage()" style="margin-top:10px;">Clear Saved Data</button>
     )rawliteral";
-
+    html += HtmlHelper::generateLogBlock();  // append inline log UI
     return html;
 }
 //
@@ -514,5 +558,6 @@ String HtmlHelper::generateVersionPage() {
     html += ESP.getSdkVersion();
     html += "\nIn the Serial:  will initialize model with hardcoded values from Config.h and @ will return after estabishing a Wifi connection to avoid repeated reboots and allow new code upload over OTA.";
     html += "</pre>";
+    html += HtmlHelper::generateLogBlock();  // append inline log UI
     return html;
     }

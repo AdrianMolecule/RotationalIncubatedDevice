@@ -8,6 +8,7 @@ class HtmlHelper {
     static String generateMetadataPage();
     static String generateAdvancedPage();
     static String generateChartPage();
+    static String generateLogBlock();
     static String generateLogPage();
     static String generateVersionPage();
     };

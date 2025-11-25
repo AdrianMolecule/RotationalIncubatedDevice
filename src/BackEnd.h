@@ -264,13 +264,11 @@ class BackEnd {
         }
     }
 };
-//
-// loose functions
-int calculateFrequency() {
-    int freq = (int)(Controller::getI("rpm") / 60 * Controller::getI("stepsPerRotation"));
-    return freq;
-}
 
+//
+float rpmToHertz(float rpm) {
+    return (int)(rpm / 60 * Controller::getI("stepsPerRotation"));  // in hertz
+}
 void startStepperIfNotStarted() {
     if (tempIsStepperOn) {
         return;  // already on
@@ -286,6 +284,7 @@ void startStepperIfNotStarted() {
         if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
         float f = rpmToHertz(rpmin);
         Controller::log("Start stepper with frequency:%.0f and RPM:%d", f, rpmin);
+        Controller::warningAlarm(("Start step frequency:" + String(f) + ", RPM:" + String(rpmin) + ", stepsPerRotation:" + String(Controller::getI("stepsPerRotation"))).c_str());
         // delay(5);
         ledcSetup(STEPPER_PWM_CHANNEL, f, UNIVERSAL_PWM_RESOLUTION);
         // delay(5);
@@ -312,10 +311,6 @@ void stopStepperIfNotStopped() {
     ledcDetachPin(Controller::getI("StepperPwmStepPin")); /* Detach the StepPin PWM Channel from the GPIO Pin */
     tempIsStepperOn = false;
     delay(100);
-}
-//
-float rpmToHertz(float rpm) {
-    return (int)(rpm / 60 * Controller::getI("stepsPerRotation"));  // in hertz
 }
 //
 void stepperSetup() {

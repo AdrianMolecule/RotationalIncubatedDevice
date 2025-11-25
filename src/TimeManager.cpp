@@ -87,7 +87,7 @@ time_t TimeManager::dateTimeStringToTimeT(const char* dateTimeStr, const char* f
     struct tm timeinfo = {0};
     // strptime reads the string into the tm structure based on the format.
     if (strptime(dateTimeStr, format, &timeinfo) == NULL) {
-        Controller::log("Error parsing date-time string: %s with format %s\n", dateTimeStr, format);
+        Controller::log("Error parsing date-time string: %s using format %s", dateTimeStr, format);
         return (time_t)-1;
     }    
     timeinfo.tm_sec = 0;// MODIFICATION: Set seconds to zero to normalize the comparison time.

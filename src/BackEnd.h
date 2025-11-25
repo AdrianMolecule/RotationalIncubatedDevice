@@ -243,7 +243,7 @@ class BackEnd {
                     Controller::setBool("currentHeaterOn", false);
                 }
             }
-            if (!Controller::getI("UseOneWireForTemperature") && humidity < minHumidity && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/) {
+            if (!Controller::getI("UseOneWireForTemperature") && Controller::getBool("LowHumidityAlert") && ((millis() - lastHumidityAlertTime) / 1000) > 200 /* about 3 minutes*/ && humidity < minHumidity) {
                 unsigned long nowTime = millis();
                 if (nowTime > lastHumidityAlertTime + 30000) {  // every half hour
                     Controller::warningAlarm("Humidity dropped to less then the minimal humidity of 60% hardcoded value");
@@ -284,7 +284,6 @@ void startStepperIfNotStarted() {
         if (!Controller::getI("MKSBoard")) setStepsPerRotation(Controller::getI("stepsPerRotation"));
         float f = rpmToHertz(rpmin);
         Controller::log("Start stepper with frequency:%.0f and RPM:%d", f, rpmin);
-        Controller::warningAlarm(("Start step frequency:" + String(f) + ", RPM:" + String(rpmin) + ", stepsPerRotation:" + String(Controller::getI("stepsPerRotation"))).c_str());
         // delay(5);
         ledcSetup(STEPPER_PWM_CHANNEL, f, UNIVERSAL_PWM_RESOLUTION);
         // delay(5);

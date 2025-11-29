@@ -7,4 +7,5 @@ it supports temperature and microstepping where available and a extremly powerfu
 
 You need to go to pass.h and relace the existing ssid and password tith you local network ssid and password
 
+git log -S pass
 git log --all -- src/Controller.h

@@ -3,7 +3,7 @@
 
 // on router go to Basic/lanSetup/dhcp reservation and click add reservation and choose 192.168.0.201 for bigOS 192.168.0.202 for TR and 192.168.0.203 for small OS
 //change biohub abd pass to your network
-const char* jsonString = "{\"ssid\":\"ad5\", \"password\":\"S1tormy!\"}";
+const char* jsonString = "{\"ssid\":\"xxx\", \"password\":\"xxx\"}";
   JsonDocument doc;
 const char * getSsid(){
   DeserializationError error = deserializeJson(doc, jsonString);

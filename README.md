@@ -9,3 +9,8 @@ You need to go to pass.h and relace the existing ssid and password tith you loca
 
 git log -S pass
 git log --all -- src/Controller.h
+git clone https://github.com/AdrianMolecule/RotationalIncubatedDevice
+
+
+remote add origin https://github.com/AdrianMolecule/RotationalIncubatedDevice
+git push origin --force --mirror             will overwrite hist on remote

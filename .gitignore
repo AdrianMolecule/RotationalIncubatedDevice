@@ -5,3 +5,4 @@
 .vscode/ipch
 e --host=github.com
 
+src/pass.h

@@ -1,0 +1,17 @@
+delete the rot directory
+git clone https://github.com/AdrianMolecule/RotationalIncubatedDevice
+remove from VSC pass.h , commit it and push it to remote
+git filter-repo --path src/pass.h --invert-paths --force	
+
+git init inside Rot....
+git remote add origin https://github.com/AdrianMolecule/RotationalIncubatedDevice
+git remote set-url origin https://github.com/AdrianMolecule/RotationalIncubatedDevice
+
+git push origin --force --mirror
+again git push origin --force --mirror
+
+Check the Local Log of a FRESH Clone (Git Check):
+Delete your local folder again (Remove-Item -Path RotationalIncubatedDevice -Recurse -Force from the parent directory).
+Clone a fresh copy from GitHub (git clone https://github.com/AdrianMolecule/RotationalIncubatedDevice).
+Run git log --all -- src/pass.h in the fresh clone.
+If you get no output (empty result), the purge was 100% successful

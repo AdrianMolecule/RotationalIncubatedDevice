@@ -64,7 +64,7 @@ class Config {
         //
         fields.emplace_back(getNextIdStr(), "UseOneWireForTemperature", "bool", "1", "UseOneWireForTemperature");  // turns off all music except for errors, warnings, time reached and first time desired temperature reached
 
-        fields.emplace_back(getNextIdStr(), "desiredProcessEndTime", "string", "-1", "Process End Time in 2025-11-12 13:00:00 format or -1 for no cutoff", false, true);
+        fields.emplace_back(getNextIdStr(), "desiredProcessEndTime", "string", "-1", "Process End Time in 2026-11-12 13:00:00 format or -1 for no cutoff.", false, true);
         fields.emplace_back(getNextIdStr(), "alarmTurnsHeatingOff", "bool", "0", "Timed alarm will also Turn Heating Off if alarm time is reached");
         fields.emplace_back(getNextIdStr(), "LowHumidityAlert", "bool", "0", "Alert if LowHumidity detected, works only for sensor DH..");
     }

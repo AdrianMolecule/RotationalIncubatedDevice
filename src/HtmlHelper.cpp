@@ -189,6 +189,7 @@ String HtmlHelper::generateStatusPage(bool brief) {
     };
     </script>
     )rawliteral";
+    html += "multiplication coeficient from 37C to 30 C is 1.6";  
     html += HtmlHelper::generateLogBlock();  // append inline log UI
     return html;
 }

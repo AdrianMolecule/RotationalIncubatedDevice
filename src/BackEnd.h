@@ -222,7 +222,7 @@ class BackEnd {
                     if (firstTimeTurnOnHeater) {
                         firstTimeTurnOnHeater = false;
                     }
-                    if (dT - temperature >= 2) {                                                                // high temp difference
+                    if (dT - temperature >= 1) {                                                                // high temp difference
                         heater(true, UNIVERSAL_MAX_DUTY_CYCLE * mHDC);                                          // Heater start
                     } else {
                         heater(true, UNIVERSAL_MAX_DUTY_CYCLE * mHDC*MODERATE_HEAT_POWER);

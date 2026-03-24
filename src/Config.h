@@ -7,8 +7,8 @@ class Config {
     public:
     static inline const char* NOT_PRESENT = "255";
     static inline const int NOT_PRESENT_INT = 255;
-    static inline const char* FIRMWARE_VERSION = "OS-Standalone Shaker 1.4";
-    static inline const char* DNS = "bioos";  // 192.168.0.190
+    static inline const char* FIRMWARE_VERSION = "IS-Incubated Shaker 1.4";
+    static inline const char* DNS = "biois";  // biois is 192.168.0.190 is the LARGE ORBITAL SHAKER, biotr is 191 the tube rotator, bioos 191, OS-Standalone Shaker 1.4 is 192 in Australia
     static constexpr const char* COMPILE_DATE = __DATE__;
     static constexpr const char* COMPILE_TIME = __TIME__;
     //
